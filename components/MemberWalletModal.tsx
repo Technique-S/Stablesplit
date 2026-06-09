@@ -15,6 +15,7 @@ interface Props {
 }
 
 export default function MemberWalletModal({ group, member, onClose, onSaved }: Props) {
+  const { address } = useAccount();
   const walletReady = useWalletReady();
   const [wallet, setWallet] = useState(member.walletAddress ?? "");
   const [error, setError] = useState("");
@@ -51,8 +52,7 @@ export default function MemberWalletModal({ group, member, onClose, onSaved }: P
     });
 
     try {
-      const updatedGroup = await updateMemberWallet(group.id, member.id, trimmed);
-      if (updatedGroup) onSaved(updatedGroup);
+      await updateMemberWallet(group.id, member.id, trimmed, address);
       onClose();
     } catch (saveError) {
       setError("Failed to save wallet address.");
@@ -65,6 +65,7 @@ export default function MemberWalletModal({ group, member, onClose, onSaved }: P
     <>
       <div
         onClick={onClose}
+        className="animate-backdrop"
         style={{
           position: "fixed",
           inset: 0,
@@ -108,8 +109,11 @@ export default function MemberWalletModal({ group, member, onClose, onSaved }: P
                 {member.displayName}
               </p>
             </div>
-            <button type="button" onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}>
-              ×
+            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
 

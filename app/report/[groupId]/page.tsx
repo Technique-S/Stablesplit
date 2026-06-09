@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getDoc, getDocs, doc, collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Group, Expense, SettlementPayment, ActivityRecord, Balance } from "@/lib/types";
+import { useProfileCheck } from "@/lib/use-profile-check";
 import { mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/db";
 import { calculateBalances, calculateSettlements, CATEGORY_ICONS, CATEGORY_BACKGROUNDS } from "@/lib/calculations";
 import { getAvatarColor, memberInitials } from "@/lib/members";
@@ -74,6 +75,7 @@ function activityShortType(eventType: ActivityRecord["eventType"]): string {
 
 export default function ReportPage() {
   const { groupId } = useParams() as { groupId: string };
+  const { status: profileStatus, checking: profileChecking } = useProfileCheck();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -125,6 +127,20 @@ export default function ReportPage() {
       // fallback
     }
   };
+
+  if (profileChecking) {
+    return (
+      <main style={{ maxWidth: 800, margin: "0 auto", padding: "2rem 1.5rem 4rem" }}>
+          <div style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}>
+            <div className="spinner spinner-lg" />
+          </div>
+        </main>
+    );
+  }
+
+  if (profileStatus !== "has-profile") {
+    return null;
+  }
 
   if (loading) {
     return (

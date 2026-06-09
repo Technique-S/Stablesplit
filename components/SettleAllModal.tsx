@@ -65,7 +65,9 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
     try {
       await addActivityRecord(groupId, "batch.settlement_initiated",
         `Batch settlement started: ${items.length} payment(s).`,
-        { batchId, paymentCount: items.length, token }
+        { batchId, paymentCount: items.length, token },
+        "StableSplit",
+        address
       );
 
       for (let i = 0; i < items.length; i++) {
@@ -93,7 +95,7 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
           currency: token,
           batchId,
           status: "pending",
-        });
+        }, address);
 
         const result = await transferArcToken({
           publicClient,
@@ -114,7 +116,7 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
           batchId,
           status: "paid",
           txHash: result.txHash,
-        });
+        }, address);
 
         messages[messages.length - 1] += " ✓";
         setProgressMessages([...messages]);
@@ -122,7 +124,9 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
 
       await addActivityRecord(groupId, "batch.settlement_completed",
         `Batch settlement completed: ${items.length} payment(s).`,
-        { batchId, paymentCount: items.length, totalAmount, token }
+        { batchId, paymentCount: items.length, totalAmount, token },
+        "StableSplit",
+        address
       );
 
       setPhase("done");
@@ -135,7 +139,9 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
 
       await addActivityRecord(groupId, "batch.settlement_failed",
         `Batch settlement failed after ${currentIndex + 1} of ${items.length} payment(s).`,
-        { batchId, completedCount: currentIndex + 1, totalCount: items.length, error: message, token }
+        { batchId, completedCount: currentIndex + 1, totalCount: items.length, error: message, token },
+        "StableSplit",
+        address
       );
 
       setPhase("error");
@@ -146,6 +152,7 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
   return (
     <>
       <div
+        className="animate-backdrop"
         onClick={phase === "preview" ? onClose : undefined}
         style={{
           position: "fixed", inset: 0,
@@ -191,9 +198,12 @@ export default function SettleAllModal({ group, groupId, items, token, onClose, 
                 <button
                   type="button"
                   onClick={onClose}
-                  style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}
+                  aria-label="Close"
+                  style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
                 >
-                  ×
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
               )}
             </div>

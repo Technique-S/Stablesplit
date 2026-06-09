@@ -4,6 +4,7 @@ export interface Member {
   walletAddress?: string;
   avatarColor?: string;
   createdAt: number;
+  joinedAt?: number;
   profileId?: string;
   role?: "owner" | "member";
 }

@@ -13,7 +13,9 @@ import SettlementPaymentButton from "@/components/SettlementPaymentButton";
 import { useAccount } from "wagmi";
 import SettleAllModal from "@/components/SettleAllModal";
 import ExportModal from "@/components/ExportModal";
+import { useProfileCheck } from "@/lib/use-profile-check";
 import { deleteExpense, deleteGroup, mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/db";
+import { CardSkeleton } from "@/components/ui/Skeleton";
 import { onSnapshot, doc, collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ActivityRecord, Group, Expense, Member, SettlementPayment, SettlementToken, RecurrenceFrequency } from "@/lib/types";
@@ -60,6 +62,7 @@ export default function GroupPage() {
   const [customDateStart, setCustomDateStart] = useState("");
   const [customDateEnd, setCustomDateEnd] = useState("");
 
+  const { status: profileStatus, checking: profileChecking } = useProfileCheck();
   const { address: connectedAddress, isConnected: isWalletConnected } = useAccount();
   const connectedMember = useMemo(() => {
     if (!connectedAddress || !group) return null;
@@ -229,7 +232,7 @@ export default function GroupPage() {
     setActionLoading(true);
     setExpenses((current) => current.filter((expense) => expense.id !== deletingExpense.id));
     try {
-      await deleteExpense(id, deletingExpense.id);
+        await deleteExpense(id, deletingExpense.id, connectedAddress);
       setSuccessMessage("Expense deleted successfully.");
       setDeletingExpense(null);
     } catch (e) {
@@ -243,7 +246,7 @@ export default function GroupPage() {
   const handleDeleteGroup = async () => {
     setActionLoading(true);
     try {
-      await deleteGroup(id);
+        await deleteGroup(id, connectedAddress);
       router.push("/");
     } catch (e) {
       setError("Failed to delete group.");
@@ -257,9 +260,7 @@ export default function GroupPage() {
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "3rem 1.5rem" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="card" style={{ height: 80, padding: "1.5rem" }}>
-                <div style={{ background: "var(--surface-2)", borderRadius: 6, height: 16, width: "45%" }} />
-              </div>
+              <CardSkeleton key={i} rows={2} />
             ))}
           </div>
         </div>
@@ -273,6 +274,18 @@ export default function GroupPage() {
           <Link href="/" style={{ color: "var(--blue)" }}>Go home</Link>
         </div>
     );
+  }
+
+  if (profileChecking) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}>
+        <div className="spinner spinner-lg" />
+      </div>
+    );
+  }
+
+  if (profileStatus !== "has-profile") {
+    return null;
   }
 
   const balances = calculateBalances(group.members, expenses);
@@ -409,12 +422,13 @@ export default function GroupPage() {
               <div>
                 <h1 style={{ fontSize: "1.375rem", fontWeight: 700, letterSpacing: "-0.03em", marginBottom: "0.125rem" }}>
                   {group.name}
-                  {group.isDemo && (
+                    {group.isDemo && (
                     <span
                       className="badge"
-                      style={{ marginLeft: "0.625rem", background: "var(--blue-light)", color: "var(--blue)", fontWeight: 600, verticalAlign: "middle", fontSize: "0.75rem" }}
+                      style={{ marginLeft: "0.625rem", background: "var(--blue-light)", color: "var(--blue)", fontWeight: 600, verticalAlign: "middle", fontSize: "0.75rem", gap: "0.375rem" }}
                     >
-                      🏷 Demo Group
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L7.5 4.5L11 6L7.5 7.5L6 11L4.5 7.5L1 6L4.5 4.5L6 1Z" fill="currentColor"/></svg>
+                      Demo Group
                     </span>
                   )}
                 </h1>
@@ -437,7 +451,7 @@ export default function GroupPage() {
 
           {(successMessage || error) && (
             <div
-              aria-live="polite"
+              role="alert"
               style={{
                 marginTop: "1rem",
                 padding: "0.75rem 1rem",
@@ -447,6 +461,7 @@ export default function GroupPage() {
                 fontSize: "0.8125rem",
                 color: successMessage ? "var(--green)" : "var(--red)",
                 fontWeight: 600,
+                animation: "fadeIn 0.3s ease forwards",
               }}
             >
               {successMessage || error}
@@ -637,7 +652,7 @@ export default function GroupPage() {
 
         {/* Tab: Expenses */}
         {tab === "expenses" && (
-          <div className="stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div key="expenses" className="animate-fade-in-up stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {/* Search + Filters */}
             <div className="card" style={{ padding: "1rem 1.25rem" }}>
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -692,7 +707,7 @@ export default function GroupPage() {
               </div>
 
               {showFilters && (
-                <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                <div className="animate-fade-in-up" style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                   <div>
                     <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-2)", marginBottom: "0.375rem" }}>Member</p>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
@@ -808,7 +823,9 @@ export default function GroupPage() {
                 className="card"
                 style={{ padding: "3rem 2rem", textAlign: "center" }}
               >
-                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>💸</div>
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" stroke="var(--text-3)" strokeWidth="1.5" strokeDasharray="3 3"/><path d="M14 20L18 24L26 16" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
                 <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>No expenses yet</p>
                 <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1rem" }}>
                   Add the first one to get started.
@@ -921,13 +938,13 @@ export default function GroupPage() {
                         {group.currency} {(exp.amount / exp.splitAmong.length).toFixed(2)}/ea
                       </div>
                       {!locked && (
-                      <div style={{ display: "flex", gap: "0.375rem", justifyContent: "flex-end", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "0.25rem", justifyContent: "flex-end", marginTop: "0.75rem", flexWrap: "wrap" }}>
                         <button
                           type="button"
                           onClick={() => setViewingExpense(exp)}
                           className="btn-secondary"
                           title="View expense"
-                          style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem" }}
+                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
                         >
                           View
                         </button>
@@ -937,9 +954,9 @@ export default function GroupPage() {
                             onClick={() => pauseRecurrence(id, exp.id)}
                             className="btn-secondary"
                             title="Pause recurrence"
-                            style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem" }}
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
                           >
-                            ⏸
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2" y="1" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="7" y="1" width="3" height="10" rx="0.5" fill="currentColor"/></svg>
                           </button>
                         )}
                         {exp.recurrence && exp.recurrence.isPaused && (
@@ -948,9 +965,9 @@ export default function GroupPage() {
                             onClick={() => resumeRecurrence(id, exp.id)}
                             className="btn-secondary"
                             title="Resume recurrence"
-                            style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem" }}
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
                           >
-                            ▶
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 1L10 6L3 11Z" fill="currentColor"/></svg>
                           </button>
                         )}
                         {exp.recurrence && (
@@ -962,9 +979,9 @@ export default function GroupPage() {
                             }}
                             className="btn-secondary"
                             title="Delete recurrence"
-                            style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem", color: "var(--red)" }}
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem", color: "var(--red)" }}
                           >
-                            🚫
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                           </button>
                         )}
                         <button
@@ -972,9 +989,9 @@ export default function GroupPage() {
                           onClick={() => setDeletingExpense(exp)}
                           className="btn-secondary"
                           title="Delete expense"
-                          style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem", color: "var(--red)" }}
+                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem", color: "var(--red)" }}
                         >
-                          🗑
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.5 3H10.5M4 3V1.5C4 1.22386 4.22386 1 4.5 1H7.5C7.77614 1 8 1.22386 8 1.5V3M9.5 5.5V10C9.5 10.2761 9.27614 10.5 9 10.5H3C2.72386 10.5 2.5 10.2761 2.5 10V5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </button>
                       </div>
                       )}
@@ -985,7 +1002,7 @@ export default function GroupPage() {
                             onClick={() => setViewingExpense(exp)}
                             className="btn-secondary"
                             title="View expense"
-                            style={{ padding: "0.35rem 0.55rem", fontSize: "0.75rem" }}
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
                           >
                             View
                           </button>
@@ -1004,10 +1021,12 @@ export default function GroupPage() {
 
         {/* Tab: Balances */}
         {tab === "balances" && (
-          <div className="stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div key="balances" className="animate-fade-in-up stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {expenses.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>◎</div>
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="14" stroke="var(--text-3)" strokeWidth="1.5"/><path d="M20 12V28M14 18L20 12L26 18" stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
                 <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>No balances yet</p>
                 <p style={{ color: "var(--text-2)", fontSize: "0.875rem" }}>
                   Add an expense and balances will appear here automatically.
@@ -1061,10 +1080,12 @@ export default function GroupPage() {
 
         {/* Tab: Settle Up */}
         {tab === "settle" && (
-          <div>
+          <div key="settle" className="animate-fade-in-up">
             {expenses.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>↔</div>
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><path d="M10 14H30M26 10L30 14L26 18M30 26H10M14 22L10 26L14 30" stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
                 <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Nothing to settle yet</p>
                 <p style={{ color: "var(--text-2)", fontSize: "0.875rem" }}>
                   Add an expense first, then settlements will appear here automatically.
@@ -1072,7 +1093,9 @@ export default function GroupPage() {
               </div>
             ) : activeAdjustedSettlements.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>✅</div>
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" stroke="var(--green)" strokeWidth="2"/><path d="M14 20L18 24L26 16" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
                 <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>All settled!</p>
                 <p style={{ color: "var(--text-2)", fontSize: "0.875rem" }}>
                   Everyone's balances are clear. Nothing to pay.
@@ -1257,10 +1280,12 @@ export default function GroupPage() {
 
         {/* Tab: History */}
         {tab === "history" && (
-          <div className="stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div key="history" className="animate-fade-in-up stagger-children" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {completedPayments.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📋</div>
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="8" y="4" width="24" height="32" rx="3" stroke="var(--text-3)" strokeWidth="1.5"/><path d="M14 14H26M14 20H26M14 26H22" stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </div>
                 <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>No payment history yet</p>
                 <p style={{ color: "var(--text-2)", fontSize: "0.875rem" }}>
                   Settlements confirmed on Arc will show up here automatically.
@@ -1390,7 +1415,7 @@ export default function GroupPage() {
               icon: "\u{1F517}",
               onClick: () => {
                 const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-                const inviteUrl = "${baseUrl}/join/${group.inviteCode}";
+                const inviteUrl = `${baseUrl}/join/${group.inviteCode}`;
                 navigator.clipboard.writeText(inviteUrl).then(() => {
                   setInviteCopied(true);
                   setSuccessMessage("Invite link copied to clipboard!");
@@ -1458,6 +1483,7 @@ function ExpenseDetailsModal({ expense, currency, onClose }: { expense: Expense;
   return (
     <>
       <div
+        className="animate-backdrop"
         onClick={onClose}
         style={{
           position: "fixed",
@@ -1497,8 +1523,11 @@ function ExpenseDetailsModal({ expense, currency, onClose }: { expense: Expense;
                 Expense details
               </p>
             </div>
-            <button type="button" onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}>
-              ×
+            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
           <div style={{ padding: "1.5rem 1.75rem", display: "grid", gap: "0.85rem" }}>
@@ -1539,6 +1568,7 @@ function ActivityPanel({
   return (
     <>
       <div
+        className="animate-backdrop"
         onClick={onClose}
         style={{
           position: "fixed",
@@ -1571,8 +1601,11 @@ function ActivityPanel({
               Group changes and settlement events
             </p>
           </div>
-          <button type="button" onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}>
-            ×
+          <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
 
@@ -1580,10 +1613,7 @@ function ActivityPanel({
           {loading ? (
             <div style={{ display: "grid", gap: "0.75rem" }}>
               {[1, 2, 3].map((item) => (
-                <div key={item} className="card" style={{ padding: "1rem" }}>
-                  <div style={{ height: 14, width: "55%", background: "var(--surface-2)", borderRadius: 6, marginBottom: "0.65rem" }} />
-                  <div style={{ height: 12, width: "82%", background: "var(--surface-2)", borderRadius: 6 }} />
-                </div>
+                <CardSkeleton key={item} rows={2} />
               ))}
             </div>
           ) : activity.length === 0 ? (
@@ -1789,8 +1819,9 @@ function InviteSection({ group }: { group: Group }) {
     <div style={{ marginTop: "1.25rem", padding: "1rem 1.25rem", background: "var(--surface-2)", borderRadius: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
         <div>
-          <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text)", marginBottom: "0.125rem" }}>
-            🔗 Invite Members
+          <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text)", marginBottom: "0.125rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><rect x="8" y="4" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M3.5 9V11H10.5V9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+            Invite Members
           </p>
           <p className="mono" style={{ fontSize: "0.6875rem", color: "var(--text-3)", wordBreak: "break-all" }}>
             {inviteUrl}

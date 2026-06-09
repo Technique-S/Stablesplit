@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import ProfileAvatarUpload from "@/components/ProfileAvatarUpload";
-import { getProfileId } from "@/lib/local-profile";
-import { getProfile, upsertProfile, uploadProfileAvatar, addJoinedGroupId } from "@/lib/profile";
+import { setProfileId } from "@/lib/local-profile";
+import { getProfileByWalletAddress, getProfile, upsertProfile, uploadProfileAvatar, addJoinedGroupId } from "@/lib/profile";
 import { getGroupsByIds } from "@/lib/db";
 import { Group, UserProfile } from "@/lib/types";
 import { validateEvmAddress, shortenAddress } from "@/lib/members";
@@ -32,16 +32,15 @@ export default function ProfilePage() {
   const [createdGroups, setCreatedGroups] = useState<Group[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
-  const profileId = getProfileId(address);
-
   const loadProfile = useCallback(async () => {
-    if (!profileId) return;
+    if (!address) return;
     setLoading(true);
     setError("");
     try {
-      const p = await getProfile(profileId);
+      const p = await getProfileByWalletAddress(address);
       setProfile(p);
       if (p) {
+        setProfileId(p.id);
         setEditName(p.displayName);
         setEditWallet(p.walletAddress ?? "");
       }
@@ -50,7 +49,7 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [profileId]);
+  }, [address]);
 
   const loadGroups = useCallback(async (p: UserProfile) => {
     setGroupsLoading(true);
@@ -100,13 +99,17 @@ export default function ProfilePage() {
     setError("");
     setSuccess("");
     try {
-      await upsertProfile({
+      const result = await upsertProfile({
         displayName: trimmedName,
         walletAddress: trimmedWallet || undefined,
-      }, profileId);
-      if (avatarFile) {
+      }, address ?? "");
+      const currentProfileId = result?.id ?? profile?.id ?? "";
+      if (result?.id) {
+        setProfileId(result.id);
+      }
+      if (avatarFile && currentProfileId) {
         try {
-          await uploadProfileAvatar(profileId, avatarFile);
+          await uploadProfileAvatar(currentProfileId, avatarFile);
         } catch {
           setError("Profile saved, but avatar upload failed.");
         }

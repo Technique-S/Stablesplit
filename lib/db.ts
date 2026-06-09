@@ -1,16 +1,12 @@
 import {
   collection,
-  deleteDoc,
-  doc,
-  addDoc,
   getDoc,
   getDocs,
   query,
   where,
-  updateDoc,
+  doc,
   setDoc,
-  writeBatch,
-  serverTimestamp,
+  updateDoc,
   DocumentData,
   DocumentSnapshot,
   QueryDocumentSnapshot,
@@ -32,6 +28,7 @@ import {
 } from "./types";
 import { MemberRecord, memberWalletMap, normalizeMembers, createMember } from "./members";
 import { notifyGroupMembers, notifySpecificMembers } from "./notifications";
+import { apiRequest } from "./api-client";
 
 function logFirestoreError(operation: string, context: Record<string, unknown>, error: unknown): void {
   console.error(`[Firestore:${operation}]`, {
@@ -180,19 +177,19 @@ export async function addActivityRecord(
   eventType: ActivityEventType,
   description: string,
   metadata: Record<string, unknown> = {},
-  actorName = "StableSplit"
+  actorName = "StableSplit",
+  walletAddress?: string
 ): Promise<void> {
   try {
-    await addDoc(collection(db, "groups", groupId, "activity"), {
+    await apiRequest("POST", "/api/activity", {
       groupId,
       eventType,
-      actorName,
       description,
       metadata,
-      createdAt: serverTimestamp(),
-    });
+      actorName,
+    }, walletAddress);
   } catch (error) {
-    logFirestoreError("addActivityRecord", { groupId, eventType }, error);
+    console.error("[addActivityRecord]", error);
   }
 }
 
@@ -252,52 +249,17 @@ export async function createGroup(
   profileId?: string,
   createdBy?: string
 ): Promise<string> {
-  try {
-    const normalizedMembers = normalizeMembers(members, memberWallets);
-    if (profileId && normalizedMembers.length > 0) {
-      normalizedMembers[0] = {
-        ...normalizedMembers[0],
-        profileId,
-        role: "owner" as const,
-      };
-    }
-    const inviteCode = generateInviteCode();
-    const payload: Record<string, unknown> = {
-      name: name.trim(),
-      description: description.trim(),
-      members: serializeMembersForFirestore(normalizedMembers),
-      memberWallets: memberWalletMap(normalizedMembers),
-      currency,
-      inviteCode,
-      createdAt: serverTimestamp(),
-      ...(templateType ? { templateType } : {}),
-      ...(createdBy ? { createdBy } : {}),
-    };
-
-    console.info("[Firestore:createGroup] Creating group.", {
-      collection: "groups",
-      memberCount: normalizedMembers.length,
-      hasWallets: Object.keys((payload.memberWallets ?? {}) as Record<string, string>).length > 0,
-    });
-
-    const ref = await addDoc(collection(db, "groups"), payload);
-    await addActivityRecord(ref.id, "group.created", `${payload.name} was created.`, {
-      groupName: payload.name,
-      currency,
-      memberCount: normalizedMembers.length,
-    });
-    await addActivityRecord(ref.id, "invite.generated", `Invite link created for ${payload.name}.`, {
-      inviteCode,
-    });
-    console.info("[Firestore:createGroup] Group created.", { groupId: ref.id });
-    return ref.id;
-  } catch (error) {
-    logFirestoreError("createGroup", {
-      collection: "groups",
-      memberCount: Array.isArray(members) ? members.length : 0,
-    }, error);
-    throw error;
-  }
+  const { groupId } = await apiRequest<{ groupId: string }>("POST", "/api/groups", {
+    name,
+    description,
+    members,
+    memberWallets,
+    currency,
+    templateType,
+    profileId,
+    createdBy: createdBy ?? profileId,
+  }, createdBy ?? profileId);
+  return groupId;
 }
 
 export async function uploadGroupImage(groupId: string, file: Blob): Promise<string> {
@@ -328,94 +290,12 @@ export async function joinGroupByInvite(
   includeInUnsettled?: boolean,
   profileId?: string
 ): Promise<{ groupId: string; groupName: string }> {
-  const group = await getGroupByInviteCode(inviteCode);
-  if (!group) throw new Error("Invalid or expired invite link.");
-
-  const nameLower = displayName.trim().toLowerCase();
-  const walletTrimmed = walletAddress?.trim() ?? "";
-
-  for (const member of group.members) {
-    if (member.displayName.toLowerCase() === nameLower) {
-      throw new Error("A member with that name already exists in this group.");
-    }
-    if (walletTrimmed && member.walletAddress?.toLowerCase() === walletTrimmed.toLowerCase()) {
-      throw new Error("A member with that wallet address already exists in this group.");
-    }
-  }
-
-  const newMember = createMember(displayName.trim(), walletTrimmed, undefined, Date.now());
-  if (profileId) newMember.profileId = profileId;
-  const updatedMembers = [...group.members, newMember];
-  const updatedWallets = { ...(group.memberWallets ?? {}), ...memberWalletMap(updatedMembers) };
-
-  await updateDoc(doc(db, "groups", group.id), {
-    members: serializeMembersForFirestore(updatedMembers),
-    memberWallets: updatedWallets,
-  });
-
-  let modifiedExpenseCount = 0;
-
-  if (includeInUnsettled) {
-    try {
-      const allExpenses = await getExpenses(group.id);
-      const unsettledExpenses = allExpenses.filter((exp) => !exp.lockedAt);
-
-      for (const expense of unsettledExpenses) {
-        if (expense.splitAmong.includes(displayName.trim())) continue;
-
-        const updatedSplitAmong = [...expense.splitAmong, displayName.trim()];
-        const ref = await getExpenseRef(group.id, expense.id);
-        await updateDoc(ref, { splitAmong: updatedSplitAmong });
-        modifiedExpenseCount++;
-      }
-    } catch (error) {
-      logFirestoreError("joinGroupByInvite.expenses", { groupId: group.id, displayName }, error);
-    }
-  }
-
-  if (modifiedExpenseCount > 0) {
-    await addActivityRecord(
-      group.id,
-      "member.joined_via_invite",
-      `${displayName.trim()} joined the group and was added to ${modifiedExpenseCount} unsettled expense${modifiedExpenseCount !== 1 ? "s" : ""}.`,
-      {
-        memberId: newMember.id,
-        memberName: displayName.trim(),
-        walletAddress: walletTrimmed || undefined,
-        modifiedExpenseCount,
-      }
-    );
-  } else {
-    await addActivityRecord(
-      group.id,
-      "member.joined_via_invite",
-      `${displayName.trim()} joined the group via invite.`,
-      {
-        memberId: newMember.id,
-        memberName: displayName.trim(),
-        walletAddress: walletTrimmed || undefined,
-      }
-    );
-  }
-
-  if (walletTrimmed) {
-    await addActivityRecord(group.id, "wallet.linked", `${displayName.trim()} linked a wallet while joining.`, {
-      memberId: newMember.id,
-      memberName: displayName.trim(),
-      walletAddress: walletTrimmed,
-    }, displayName.trim());
-  }
-
-  await notifyGroupMembers(
-    group.id,
-    "member.joined_via_invite",
-    `${displayName.trim()} joined the group.`,
-    displayName.trim(),
-    [displayName.trim()],
-    group.name
+  const { groupId, groupName } = await apiRequest<{ groupId: string; groupName: string; alreadyMember?: boolean }>(
+    "POST", "/api/groups/join",
+    { inviteCode, displayName, walletAddress, includeInUnsettled, profileId },
+    walletAddress
   );
-
-  return { groupId: group.id, groupName: group.name };
+  return { groupId, groupName };
 }
 
 export async function getGroup(id: string): Promise<Group | null> {
@@ -478,226 +358,46 @@ export async function getGroupsByIds(ids: string[]): Promise<Group[]> {
 
 export async function addMemberToGroup(
   groupId: string,
-  member: MemberRecord
+  member: MemberRecord,
+  walletAddress?: string
 ): Promise<void> {
-  const group = await getGroup(groupId);
-  if (!group) return;
-  const nextMembers = normalizeMembers([...group.members, member], group.memberWallets, group.createdAt);
-  await updateDoc(doc(db, "groups", groupId), {
-    members: serializeMembersForFirestore(nextMembers),
-    memberWallets: memberWalletMap(nextMembers),
-  });
+  await apiRequest("PATCH", `/api/groups/${groupId}`, {
+    operation: "addMember",
+    member,
+  }, walletAddress);
 }
 
 export async function updateGroup(
   groupId: string,
-  input: GroupInput
+  input: GroupInput,
+  walletAddress?: string
 ): Promise<void> {
-  const previous = await getGroup(groupId);
-  const members = normalizeMembers(input.members, input.memberWallets);
-  const updatePayload: Record<string, unknown> = {
+  await apiRequest("PATCH", `/api/groups/${groupId}`, {
     name: input.name,
     description: input.description,
     currency: input.currency,
-    members: serializeMembersForFirestore(members),
-    memberWallets: { ...(input.memberWallets ?? {}), ...memberWalletMap(members) },
-  };
-  if (input.photoURL !== undefined) updatePayload.photoURL = input.photoURL;
-  if (input.templateType !== undefined) updatePayload.templateType = input.templateType;
-  await updateDoc(doc(db, "groups", groupId), updatePayload);
-
-  if (!previous) return;
-
-  const previousMembers = new Map(previous.members.map((member) => [memberKey(member), member]));
-  const nextMembers = new Map(members.map((member) => [memberKey(member), member]));
-
-  if (previous.name !== input.name) {
-    await addActivityRecord(groupId, "group.renamed", `Group renamed from ${previous.name} to ${input.name}.`, {
-      from: previous.name,
-      to: input.name,
-    });
-  }
-
-  if ((previous.description ?? "") !== input.description) {
-    await addActivityRecord(groupId, "group.description_updated", "Group description was updated.", {
-      from: previous.description ?? "",
-      to: input.description,
-    });
-  }
-
-  if (previous.currency !== input.currency) {
-    await addActivityRecord(groupId, "group.currency_changed", `Currency changed from ${previous.currency} to ${input.currency}.`, {
-      from: previous.currency,
-      to: input.currency,
-    });
-  }
-
-  for (const member of members) {
-    const oldMember = previousMembers.get(memberKey(member));
-    if (!oldMember) {
-      await addActivityRecord(groupId, "member.added", `${member.displayName} was added to the group.`, {
-        memberId: member.id,
-        memberName: member.displayName,
-      });
-      continue;
-    }
-
-    const oldWallet = oldMember.walletAddress?.trim() ?? "";
-    const nextWallet = member.walletAddress?.trim() ?? "";
-    if (!oldWallet && nextWallet) {
-      await addActivityRecord(groupId, "wallet.linked", `${member.displayName} linked a wallet.`, {
-        memberId: member.id,
-        memberName: member.displayName,
-        walletAddress: nextWallet,
-      }, member.displayName);
-    } else if (oldWallet && nextWallet && oldWallet.toLowerCase() !== nextWallet.toLowerCase()) {
-      await addActivityRecord(groupId, "wallet.updated", `${member.displayName} updated their wallet.`, {
-        memberId: member.id,
-        memberName: member.displayName,
-        previousWallet: oldWallet,
-        walletAddress: nextWallet,
-      }, member.displayName);
-    }
-  }
-
-  for (const member of previous.members) {
-    if (!nextMembers.has(memberKey(member))) {
-      await addActivityRecord(groupId, "member.removed", `${member.displayName} was removed from the group.`, {
-        memberId: member.id,
-        memberName: member.displayName,
-      });
-    }
-  }
-
-  const changes: string[] = [];
-  if (previous.name !== input.name) changes.push(`renamed to "${input.name}"`);
-  if ((previous.description ?? "") !== input.description) changes.push("description updated");
-  if (previous.currency !== input.currency) changes.push(`currency changed to ${input.currency}`);
-  if (changes.length > 0) {
-    await notifyGroupMembers(
-      groupId,
-      "group.renamed",
-      `Group ${changes.join(", ")}.`,
-      "StableSplit",
-      [],
-      input.name
-    );
-  }
-
-  for (const member of members) {
-    const oldMember = previousMembers.get(memberKey(member));
-    if (!oldMember && member.profileId) {
-      await notifyGroupMembers(
-        groupId,
-        "member.added",
-        `${member.displayName} was added to the group.`,
-        "StableSplit",
-        [member.displayName],
-        input.name
-      );
-    }
-  }
+    members: input.members,
+    memberWallets: input.memberWallets,
+    photoURL: input.photoURL,
+    templateType: input.templateType,
+  }, walletAddress);
 }
 
 export async function updateMemberWallet(
   groupId: string,
   memberId: string,
-  walletAddress: string
-): Promise<Group | null> {
-  try {
-    console.info("[Firestore:updateMemberWallet] Updating member wallet.", {
-      collection: "groups",
-      groupId,
-      memberId,
-      hasWallet: Boolean(walletAddress.trim()),
-    });
-
-    const group = await getGroup(groupId);
-    if (!group) return null;
-
-    const trimmedWallet = walletAddress.trim();
-    const members = group.members.map((member) => {
-      if (member.id !== memberId) return member;
-      return {
-        ...member,
-        walletAddress: trimmedWallet || undefined,
-      };
-    });
-
-    const nextGroup = {
-      ...group,
-      members,
-      memberWallets: memberWalletMap(members),
-    };
-
-    await updateDoc(doc(db, "groups", groupId), {
-      members: serializeMembersForFirestore(members),
-      memberWallets: nextGroup.memberWallets,
-    });
-
-    const previousWallet = group.members.find((member) => member.id === memberId)?.walletAddress?.trim() ?? "";
-    if (previousWallet.toLowerCase() === trimmedWallet.toLowerCase()) {
-      console.info("[Firestore:updateMemberWallet] Member wallet unchanged.", {
-        groupId,
-        memberId,
-      });
-      return nextGroup;
-    }
-
-    const eventType: ActivityEventType = previousWallet ? "wallet.updated" : "wallet.linked";
-    const memberName = members.find((member) => member.id === memberId)?.displayName ?? "A member";
-    await addActivityRecord(
-      groupId,
-      eventType,
-      previousWallet ? `${memberName} updated their wallet.` : `${memberName} linked a wallet.`,
-      {
-        memberId,
-        memberName,
-        previousWallet,
-        walletAddress: trimmedWallet,
-      },
-      memberName
-    );
-
-    console.info("[Firestore:updateMemberWallet] Member wallet updated.", {
-      groupId,
-      memberId,
-    });
-
-    return nextGroup;
-  } catch (error) {
-    logFirestoreError("updateMemberWallet", {
-      collection: "groups",
-      groupId,
-      memberId,
-    }, error);
-    throw error;
-  }
+  walletAddress: string,
+  callerAddress?: string
+): Promise<void> {
+  await apiRequest("PATCH", `/api/groups/${groupId}`, {
+    operation: "updateWallet",
+    memberId,
+    walletAddress,
+  }, callerAddress);
 }
 
-export async function deleteGroup(groupId: string): Promise<void> {
-  const batch = writeBatch(db);
-  const groupRef = doc(db, "groups", groupId);
-  const groupSnap = await getDoc(groupRef);
-  const groupName = groupSnap.data()?.name ?? "Group";
-
-  await addActivityRecord(groupId, "group.deleted", `${groupName} was deleted.`, {
-    groupName,
-  });
-
-  const nestedExpenses = await getDocs(collection(db, "groups", groupId, "expenses"));
-  nestedExpenses.docs.forEach((expenseDoc) => batch.delete(expenseDoc.ref));
-
-  const settlementPayments = await getDocs(collection(db, "groups", groupId, "settlementPayments"));
-  settlementPayments.docs.forEach((paymentDoc) => batch.delete(paymentDoc.ref));
-
-  const legacyExpenses = await getDocs(
-    query(collection(db, "expenses"), where("groupId", "==", groupId))
-  );
-  legacyExpenses.docs.forEach((expenseDoc) => batch.delete(expenseDoc.ref));
-
-  batch.delete(groupRef);
-  await batch.commit();
+export async function deleteGroup(groupId: string, walletAddress?: string): Promise<void> {
+  await apiRequest("DELETE", `/api/groups/${groupId}`, {}, walletAddress);
 }
 
 // Expenses
@@ -707,112 +407,30 @@ export async function addExpense(
   amount: number,
   paidBy: string,
   splitAmong: string[],
-  category: ExpenseCategory
+  category: ExpenseCategory,
+  walletAddress?: string
 ): Promise<string> {
-  return createExpense(groupId, {
-    description,
-    amount,
-    paidBy,
-    splitAmong,
-    category,
-  });
+  return createExpense(groupId, { description, amount, paidBy, splitAmong, category }, walletAddress);
 }
 
 export async function createExpense(
   groupId: string,
-  expense: ExpenseInput
+  expense: ExpenseInput,
+  walletAddress?: string
 ): Promise<string> {
-  const payload: Record<string, unknown> = {
+  const { expenseId } = await apiRequest<{ expenseId: string }>("POST", "/api/expenses", {
     groupId,
-    description: expense.description,
-    amount: expense.amount,
-    paidBy: expense.paidBy,
-    splitAmong: expense.splitAmong,
-    category: expense.category,
-    date: expense.date ?? Date.now(),
-    notes: expense.notes ?? "",
-    createdAt: serverTimestamp(),
-  };
-  if (expense.recurrence) {
-    payload.recurrence = {
-      frequency: expense.recurrence.frequency,
-      nextDate: expense.recurrence.nextDate,
-      isPaused: expense.recurrence.isPaused,
-    };
-  }
-  if (expense.originalCurrency) {
-    payload.originalCurrency = expense.originalCurrency;
-    payload.baseUsdAmount = expense.baseUsdAmount;
-    payload.baseEurAmount = expense.baseEurAmount;
-    payload.fxRate = expense.fxRate;
-  }
-  const ref = await addDoc(collection(db, "groups", groupId, "expenses"), payload);
-  const activityMeta: Record<string, unknown> = {
-    expenseId: ref.id,
-    description: expense.description,
-    amount: expense.amount,
-    paidBy: expense.paidBy,
-    splitAmong: expense.splitAmong,
-    category: expense.category,
-  };
-  const activityDesc = expense.recurrence
-    ? `${expense.description} was added (recurring ${expense.recurrence.frequency}).`
-    : `${expense.description} was added.`;
-  if (expense.recurrence) {
-    activityMeta.isRecurring = true;
-    activityMeta.recurrenceFrequency = expense.recurrence.frequency;
-  }
-  await addActivityRecord(groupId, "expense.created", activityDesc, activityMeta, expense.paidBy || "StableSplit");
-
-  const notifyExclude = [expense.paidBy];
-  try {
-    const groupSnap = await getDoc(doc(db, "groups", groupId));
-    const groupData = groupSnap.data();
-    const groupName = groupData?.name ?? "";
-    await notifyGroupMembers(
-      groupId,
-      "expense.created",
-      `${expense.paidBy} added "${expense.description}" (${expense.splitAmong.length}-way split).`,
-      expense.paidBy || "StableSplit",
-      notifyExclude,
-      groupName
-    );
-  } catch {
-    // notification fire-and-forget
-  }
-
-  return ref.id;
-}
-
-async function getExpenseRef(groupId: string, expenseId: string) {
-  const nestedRef = doc(db, "groups", groupId, "expenses", expenseId);
-  const nestedSnap = await getDoc(nestedRef);
-  if (nestedSnap.exists()) return nestedRef;
-
-  const legacyRef = doc(db, "expenses", expenseId);
-  const legacySnap = await getDoc(legacyRef);
-  if (legacySnap.exists()) return legacyRef;
-
-  return nestedRef;
+    ...expense,
+  }, walletAddress);
+  return expenseId;
 }
 
 export async function deleteExpense(
   groupId: string,
-  expenseId: string
+  expenseId: string,
+  walletAddress?: string
 ): Promise<void> {
-  const ref = await getExpenseRef(groupId, expenseId);
-  const snap = await getDoc(ref);
-  if (snap.exists() && snap.data().lockedAt) {
-    throw new Error("This expense is locked because it predates a completed settlement.");
-  }
-  const data = snap.data();
-  await deleteDoc(ref);
-  await addActivityRecord(groupId, "expense.deleted", `${data?.description ?? "An expense"} was deleted.`, {
-    expenseId,
-    description: data?.description ?? "",
-    amount: Number(data?.amount ?? 0),
-    paidBy: data?.paidBy ?? "",
-  });
+  await apiRequest("DELETE", `/api/expenses/${expenseId}`, { groupId }, walletAddress);
 }
 
 export async function getExpenses(groupId: string): Promise<Expense[]> {
@@ -939,138 +557,13 @@ export async function upsertSettlementPayment(
   groupId: string,
   payment: Omit<SettlementPayment, "id" | "groupId" | "createdAt" | "updatedAt"> & {
     createdAt?: number;
-  }
+  },
+  walletAddress?: string
 ): Promise<void> {
-  const ref = doc(db, "groups", groupId, "settlementPayments", payment.settlementKey);
-  const existing = await getDoc(ref);
-  const existingData = existing.data();
-  const existingStatus = existingData?.settlementStatus ?? existingData?.status;
-  if (existingStatus === "paid") {
-    return;
-  }
-  if (existingStatus === "pending" && payment.status === "pending") {
-    throw new Error("This settlement is already pending.");
-  }
-
-  const paymentPayload = {
-    ...payment,
+  await apiRequest("POST", "/api/settlements", {
     groupId,
-    currency: payment.currency,
-    settlementTokenUsed: payment.currency,
-    status: payment.status,
-    settlementStatus: payment.status,
-    settledAt: payment.status === "paid" ? serverTimestamp() : existingData?.settledAt ?? null,
-    createdAt: existing.exists() ? existingData?.createdAt : serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  if (payment.status !== "paid") {
-    await setDoc(ref, paymentPayload, { merge: true });
-
-    const notifyMembersForSettlement = async () => {
-      try {
-        const gSnap = await getDoc(doc(db, "groups", groupId));
-        const gData = gSnap.data() ?? {};
-        const gName = gData.name ?? "";
-        const gMembers: Array<Record<string, unknown>> = Array.isArray(gData.members) ? gData.members : [];
-        const toProfileId = (gMembers.find((m: Record<string, unknown>) => m.displayName === payment.to)?.profileId as string) ?? "";
-        if (toProfileId) {
-          await notifySpecificMembers(
-            groupId,
-            payment.status === "pending" ? "settlement.initiated" : "settlement.failed",
-            payment.status === "pending"
-              ? `${payment.from} started a settlement of ${payment.currency} ${payment.amount.toFixed(2)} to you.`
-              : `${payment.from}'s settlement of ${payment.currency} ${payment.amount.toFixed(2)} to you failed.`,
-            payment.from,
-            [toProfileId],
-            gName
-          );
-        }
-      } catch { /* ignore */ }
-    };
-
-    if (payment.status === "pending") {
-      await addActivityRecord(groupId, "settlement.initiated", `${payment.from} started a settlement to ${payment.to}.`, {
-        settlementKey: payment.settlementKey,
-        from: payment.from,
-        to: payment.to,
-        amount: payment.amount,
-        token: payment.currency,
-      }, payment.from);
-      void notifyMembersForSettlement();
-    } else if (payment.status === "failed") {
-      await addActivityRecord(groupId, "settlement.failed", `${payment.from}'s settlement to ${payment.to} failed.`, {
-        settlementKey: payment.settlementKey,
-        from: payment.from,
-        to: payment.to,
-        amount: payment.amount,
-        token: payment.currency,
-      }, payment.from);
-      void notifyMembersForSettlement();
-    }
-    return;
-  }
-
-  const groupRef = doc(db, "groups", groupId);
-  const groupSnap = await getDoc(groupRef);
-  const groupData = groupSnap.data() ?? {};
-  const settlementAt = Date.now();
-  const batch = writeBatch(db);
-
-  batch.set(ref, {
-    ...paymentPayload,
-    settledAt: settlementAt,
-  }, { merge: true });
-
-  batch.set(groupRef, {
-    firstSettlementAt: groupData.firstSettlementAt ?? settlementAt,
-  }, { merge: true });
-
-  const nestedExpenses = await getDocs(collection(db, "groups", groupId, "expenses"));
-  nestedExpenses.docs.forEach((expenseDoc) => {
-    const data = expenseDoc.data();
-    const createdAt = toMillis(data.createdAt);
-    if (!data.lockedAt && createdAt <= settlementAt) {
-      batch.set(expenseDoc.ref, { lockedAt: settlementAt }, { merge: true });
-    }
-  });
-
-  const legacyExpenses = await getDocs(
-    query(collection(db, "expenses"), where("groupId", "==", groupId))
-  );
-  legacyExpenses.docs.forEach((expenseDoc) => {
-    const data = expenseDoc.data();
-    const createdAt = toMillis(data.createdAt);
-    if (!data.lockedAt && createdAt <= settlementAt) {
-      batch.set(expenseDoc.ref, { lockedAt: settlementAt }, { merge: true });
-    }
-  });
-
-  await batch.commit();
-  await addActivityRecord(groupId, "settlement.completed", `${payment.from} paid ${payment.to}.`, {
-    settlementKey: payment.settlementKey,
-    from: payment.from,
-    to: payment.to,
-    amount: payment.amount,
-    token: payment.currency,
-    txHash: payment.txHash ?? "",
-  }, payment.from);
-
-  const gMembers: Array<Record<string, unknown>> = Array.isArray(groupData.members) ? groupData.members : [];
-  const settlementTargets = [
-    gMembers.find((m: Record<string, unknown>) => m.displayName === payment.from)?.profileId,
-    gMembers.find((m: Record<string, unknown>) => m.displayName === payment.to)?.profileId,
-  ].filter(Boolean) as string[];
-  if (settlementTargets.length > 0) {
-    await notifySpecificMembers(
-      groupId,
-      "settlement.completed",
-      `${payment.from} paid ${payment.to} ${payment.currency} ${payment.amount.toFixed(2)}.`,
-      payment.from,
-      settlementTargets,
-      groupData.name as string
-    );
-  }
+    ...payment,
+  }, walletAddress);
 }
 
 const DEMO_MEMBER_NAMES = ["Lou", "Ada", "John", "Sarah", "Mike"];
@@ -1083,82 +576,23 @@ const DEMO_WALLETS: Record<string, string> = {
   Mike: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
 };
 
-export async function generateDemoGroup(): Promise<string> {
-  const now = Date.now();
-  const allGroups = await getAllGroups();
-  const existing = allGroups.find((g) => g.name === "Weekend Trip" && g.isDemo);
-  if (existing) return existing.id;
-
-  const members = DEMO_MEMBER_NAMES.map((name) =>
-    createMember(name, DEMO_WALLETS[name] ?? "", undefined, now)
-  );
-  const wallets = memberWalletMap(members);
-
-  const groupRef = await addDoc(collection(db, "groups"), {
-    name: "Weekend Trip",
-    description: "Sample group demonstrating expense sharing and Arc settlement.",
-    members: serializeMembersForFirestore(members),
-    memberWallets: wallets,
-    currency: "USD",
-    isDemo: true,
-    createdAt: serverTimestamp(),
-  });
-  const groupId = groupRef.id;
-
-  await addActivityRecord(groupId, "group.created", "Weekend Trip was created.", {
-    groupName: "Weekend Trip",
-    currency: "USD",
-    memberCount: 5,
-    isDemo: true,
-  });
-
-  for (const m of members) {
-    await addActivityRecord(groupId, "member.added", `${m.displayName} was added to the group.`, {
-      memberId: m.id,
-      memberName: m.displayName,
-    });
-  }
-
-  const expenses: Array<{
-    description: string;
-    amount: number;
-    paidBy: string;
-    category: ExpenseCategory;
-  }> = [
-    { description: "Hotel Booking", amount: 150, paidBy: "Ada", category: "accommodation" },
-    { description: "Dinner", amount: 60, paidBy: "Lou", category: "food" },
-    { description: "Taxi Ride", amount: 30, paidBy: "Sarah", category: "transport" },
-    { description: "Movie Tickets", amount: 80, paidBy: "John", category: "entertainment" },
-    { description: "Coffee Run", amount: 25, paidBy: "Mike", category: "food" },
-  ];
-
-  for (const exp of expenses) {
-    const expenseRef = await addDoc(collection(db, "groups", groupId, "expenses"), {
-      groupId,
-      description: exp.description,
-      amount: exp.amount,
-      paidBy: exp.paidBy,
-      splitAmong: DEMO_MEMBER_NAMES,
-      category: exp.category,
-      date: now,
-      notes: "",
-      createdAt: serverTimestamp(),
-    });
-    await addActivityRecord(
-      groupId,
-      "expense.created",
-      `${exp.description} was added.`,
-      {
-        expenseId: expenseRef.id,
-        description: exp.description,
-        amount: exp.amount,
-        paidBy: exp.paidBy,
-        splitAmong: DEMO_MEMBER_NAMES,
-        category: exp.category,
-      },
-      exp.paidBy
+async function findExistingDemoGroup(): Promise<string | null> {
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, "groups"),
+        where("name", "==", "Weekend Trip"),
+        where("isDemo", "==", true)
+      )
     );
+    if (!snap.empty) return snap.docs[0].id;
+  } catch {
+    // composite index may not exist — fall back to scanning safely
   }
+  return null;
+}
 
+export async function generateDemoGroup(walletAddress?: string): Promise<string> {
+  const { groupId } = await apiRequest<{ groupId: string }>("POST", "/api/demo", {}, walletAddress);
   return groupId;
 }

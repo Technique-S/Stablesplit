@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import OnboardingScreen from "@/components/OnboardingScreen";
-import { getAllGroups, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/db";
+import { useProfileCheck } from "@/lib/use-profile-check";
+import { getGroupsByIds, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/db";
 import { getProfileId } from "@/lib/local-profile";
-import { getProfile } from "@/lib/profile";
 import { Group, Balance, SettlementPayment, ActivityRecord } from "@/lib/types";
 import { memberInitials, memberNames } from "@/lib/members";
+import { CardSkeleton, ActivitySkeleton } from "@/components/ui/Skeleton";
 
 interface GroupBalance {
   groupId: string;
@@ -37,48 +38,89 @@ export default function DashboardPage() {
 
   const [lastActiveGroupId, setLastActiveGroupId] = useState<string | null>(null);
 
+  const { status: profileStatus, checking: profileChecking, profile, profileId: checkedProfileId } = useProfileCheck();
+  const previousAddressRef = useRef<string | undefined>(undefined);
+  const loadCancelledRef = useRef(false);
+
+  // ── Clear all cached group state when the wallet address changes ──
   useEffect(() => {
-    const pid = getProfileId(address);
-    setProfileId(pid);
-    if (pid) {
-      getProfile(pid).then((p) => {
-        setProfileReady(!!p);
-        setLoading(false);
-      }).catch(() => {
-        setProfileReady(false);
-        setLoading(false);
-      });
-    } else {
-      setProfileReady(false);
-      setLoading(false);
+    if (!previousAddressRef.current) {
+      previousAddressRef.current = address;
+      return;
+    }
+    if (address !== previousAddressRef.current) {
+      loadCancelledRef.current = true;
+      setAllGroups([]);
+      setGroupBalances([]);
+      setRecentSettlements([]);
+      setRecentActivity([]);
+      setLastActiveGroupId(null);
+      setError("");
+      previousAddressRef.current = address;
     }
   }, [address]);
 
+  useEffect(() => {
+    if (profileChecking) return;
+    const pid = checkedProfileId || getProfileId(address);
+    setProfileId(pid);
+    setProfileReady(profileStatus === "has-profile");
+    setLoading(false);
+  }, [profileStatus, profileChecking, checkedProfileId, address]);
+
   const loadData = useCallback(async () => {
-    if (!profileId) return;
+    if (!profileId || !profile) return;
+    if (loadCancelledRef.current) return;
+
+    const walletLower = address?.toLowerCase() ?? "";
+
     setError("");
     setAggregateLoading(true);
-    try {
-      const profile = await getProfile(profileId);
-      if (!profile || (profile.joinedGroupIds.length === 0 && profile.createdGroupIds.length === 0)) {
-        const groups = await getAllGroups();
-        setAllGroups(groups);
-        setLoading(false);
-        return;
-      }
 
+    try {
       const groupIds = [...new Set([...profile.createdGroupIds, ...profile.joinedGroupIds])];
-      const groups = await getAllGroups();
-      const filtered = groups.filter((g) => groupIds.includes(g.id));
+
+      // ── Never fetch all groups; only fetch groups the profile claims ──
+      const groups = groupIds.length > 0 ? await getGroupsByIds(groupIds) : [];
+      if (loadCancelledRef.current) return;
+
+      // ── Defensive membership check: verify user is actually a member ──
+      const verified = groups.filter((g) => {
+        const byCreator = g.createdBy?.toLowerCase() === walletLower;
+        const byMemberWallet = g.members.some(
+          (m) => m.walletAddress?.toLowerCase() === walletLower
+        );
+        const byMemberProfile = g.members.some(
+          (m) => m.profileId?.toLowerCase() === walletLower
+        );
+
+        if (byCreator || byMemberWallet || byMemberProfile) {
+          console.log("[Dashboard] Group included", {
+            groupId: g.id,
+            groupName: g.name,
+            reason: byCreator ? "creator" : byMemberWallet ? "member_wallet" : "member_profile",
+          });
+          return true;
+        }
+
+        console.warn("[Dashboard] Group excluded — user is not a member", {
+          groupId: g.id,
+          groupName: g.name,
+          profileId,
+        });
+        return false;
+      });
+
       const createdSet = new Set(profile.createdGroupIds);
       const joinedSet = new Set(profile.joinedGroupIds);
 
       const ordered = [
-        ...filtered.filter((g) => createdSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
-        ...filtered.filter((g) => !createdSet.has(g.id) && joinedSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
+        ...verified.filter((g) => createdSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
+        ...verified.filter((g) => !createdSet.has(g.id) && joinedSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
       ];
 
       setAllGroups(ordered);
+      if (loadCancelledRef.current) return;
 
       if (ordered.length === 0) {
         setLoading(false);
@@ -166,7 +208,7 @@ export default function DashboardPage() {
       setLoading(false);
       setAggregateLoading(false);
     }
-  }, [profileId]);
+  }, [profileId, profile, address]);
 
   useEffect(() => {
     if (!profileReady || !profileId) return;
@@ -178,7 +220,7 @@ export default function DashboardPage() {
     setDemoLoading(true);
     setDemoError("");
     try {
-      const groupId = await generateDemoGroup();
+        const groupId = await generateDemoGroup(address);
       router.push(`/group/${groupId}?demo=1`);
     } catch (e) {
       console.error("[Dashboard] Failed to generate demo group.", e);
@@ -230,7 +272,7 @@ export default function DashboardPage() {
 
   const hasProfileData = allGroups.length > 0;
 
-  if (!loading && (!profileReady || !profileId)) {
+  if (!loading && !isConnected) {
     return (
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2.5rem 1.5rem 4rem" }}>
           <OnboardingScreen />
@@ -256,8 +298,10 @@ export default function DashboardPage() {
                 Open Last Active
               </button>
             )}
-            <button onClick={handleGenerateDemo} disabled={demoLoading} className="btn-secondary" style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem" }}>
-              {demoLoading ? "Generating..." : "⚡ Demo"}
+            <button onClick={handleGenerateDemo} disabled={demoLoading} className="btn-secondary" style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem", display: "inline-flex", alignItems: "center", gap: "0.375rem" }}>
+              {demoLoading ? "Generating..." : (
+                <><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" fill="currentColor"/></svg> Demo</>
+              )}
             </button>
             <Link href="/create" style={{ textDecoration: "none" }}>
               <button className="btn-primary" style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem" }}>
@@ -268,31 +312,31 @@ export default function DashboardPage() {
         </div>
 
         {demoError && (
-          <div style={{ marginBottom: "1.25rem", padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
+          <div role="alert" style={{ marginBottom: "1.25rem", padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
             {demoError}
           </div>
         )}
         {error && (
-          <div style={{ marginBottom: "1.25rem", padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
+          <div role="alert" style={{ marginBottom: "1.25rem", padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
             {error}
           </div>
         )}
 
         {/* Stats */}
         {hasProfileData && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
-            <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--blue-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.125rem", color: "var(--blue)", fontWeight: 700 }}>
-                ⬡
+          <div className="stagger-children" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+            <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{ width: 40, height: 40, background: "var(--blue-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="1" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="1" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/></svg>
               </div>
               <div>
                 <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>{allGroups.length}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-2)", fontWeight: 500 }}>Groups</div>
               </div>
             </div>
-            <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--green-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.125rem", color: "var(--green)", fontWeight: 700 }}>
-                +
+            <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{ width: 40, height: 40, background: "var(--green-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4V16M4 10H16" stroke="var(--green)" strokeWidth="2" strokeLinecap="round"/></svg>
               </div>
               <div>
                 <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -302,9 +346,9 @@ export default function DashboardPage() {
               </div>
             </div>
             {totalOwed > 0 && (
-              <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-                <div style={{ width: 40, height: 40, background: "var(--red-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.125rem", color: "var(--red)", fontWeight: 700 }}>
-                  -
+              <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                <div style={{ width: 40, height: 40, background: "var(--red-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10H16" stroke="var(--red)" strokeWidth="2" strokeLinecap="round"/></svg>
                 </div>
                 <div>
                   <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -315,8 +359,8 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--surface-2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.125rem", color: "var(--text-2)", fontWeight: 700 }}>
-                ◎
+              <div style={{ width: 40, height: 40, background: "var(--surface-2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="var(--text-2)" strokeWidth="1.5"/><path d="M6 10L9 13L14 7" stroke="var(--text-2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
               <div>
                 <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -332,17 +376,14 @@ export default function DashboardPage() {
           <div>
             <div className="stagger-children" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))", gap: "1rem" }}>
               {[1, 2, 3].map((i) => (
-                <div key={i} className="card" style={{ padding: "1.5rem", height: 160 }}>
-                  <div style={{ background: "var(--surface-2)", borderRadius: 8, height: 20, width: "60%", marginBottom: "0.75rem" }} />
-                  <div style={{ background: "var(--surface-2)", borderRadius: 8, height: 14, width: "40%" }} />
-                </div>
+                <CardSkeleton key={i} rows={3} />
               ))}
             </div>
           </div>
         ) : !hasProfileData ? (
           <div className="card animate-fade-in" style={{ padding: "4rem 2rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-            <div style={{ width: 64, height: 64, background: "var(--blue-light)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.75rem" }}>
-              ⬡
+            <div style={{ width: 64, height: 64, background: "var(--blue-light)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="2" width="10" height="10" rx="3" stroke="var(--blue)" strokeWidth="2"/><rect x="16" y="2" width="10" height="10" rx="3" stroke="var(--blue)" strokeWidth="2"/><rect x="2" y="16" width="10" height="10" rx="3" stroke="var(--blue)" strokeWidth="2"/><rect x="16" y="16" width="10" height="10" rx="3" stroke="var(--blue)" strokeWidth="2"/></svg>
             </div>
             <div>
               <p style={{ fontWeight: 600, fontSize: "1rem", marginBottom: "0.25rem" }}>No groups yet</p>
@@ -387,7 +428,7 @@ export default function DashboardPage() {
                         {group.name}
                         {group.isDemo && (
                           <span className="badge" style={{ marginLeft: "0.5rem", background: "var(--blue-light)", color: "var(--blue)", fontWeight: 600, verticalAlign: "middle" }}>
-                            🏷 Demo
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L7.5 4.5L11 6L7.5 7.5L6 11L4.5 7.5L1 6L4.5 4.5L6 1Z" fill="currentColor"/></svg> Demo
                           </span>
                         )}
                       </h3>
@@ -447,7 +488,7 @@ export default function DashboardPage() {
                 {aggregateLoading ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                     {[1, 2, 3].map((i) => (
-                      <div key={i} style={{ height: 20, width: "80%", background: "var(--surface-2)", borderRadius: 6 }} />
+                      <div key={i} className="skeleton" style={{ height: 20, width: `${70 + i * 10}%` }} />
                     ))}
                   </div>
                 ) : groupBalances.length === 0 ? (
@@ -529,19 +570,7 @@ export default function DashboardPage() {
                 Recent Activity
               </h2>
               {aggregateLoading ? (
-                <div className="card" style={{ padding: "1.5rem" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--surface-2)", flexShrink: 0 }} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ height: 14, width: "60%", background: "var(--surface-2)", borderRadius: 6, marginBottom: "0.25rem" }} />
-                          <div style={{ height: 12, width: "30%", background: "var(--surface-2)", borderRadius: 6 }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <ActivitySkeleton />
               ) : recentActivity.length === 0 && recentSettlements.length === 0 ? (
                 <div className="card" style={{ padding: "2rem", textAlign: "center" }}>
                   <p style={{ color: "var(--text-2)", fontSize: "0.875rem" }}>No recent activity across your groups.</p>

@@ -1,6 +1,13 @@
-export function getProfileId(walletAddress?: string): string {
-  if (!walletAddress || typeof walletAddress !== "string") return "";
-  const trimmed = walletAddress.trim().toLowerCase();
-  if (!trimmed.startsWith("0x") || trimmed.length < 10) return "";
-  return trimmed;
+export function getProfileId(_walletAddress?: string): string {
+  try {
+    const cached = sessionStorage.getItem("stablesplit_profileId");
+    if (cached) return cached;
+  } catch {}
+  return "";
+}
+
+export function setProfileId(uuid: string): void {
+  try {
+    sessionStorage.setItem("stablesplit_profileId", uuid);
+  } catch {}
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { getProfileId } from "@/lib/local-profile";
+import { getProfileByWalletAddress } from "@/lib/profile";
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from "@/lib/notifications";
 import type { AppNotification } from "@/lib/types";
 
@@ -28,7 +29,14 @@ export default function NotificationBell() {
   const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    setProfileId(getProfileId(address));
+    const cached = getProfileId(address);
+    if (cached) {
+      setProfileId(cached);
+    } else if (address) {
+      getProfileByWalletAddress(address).then((p) => {
+        if (p?.id) setProfileId(p.id);
+      }).catch(() => {});
+    }
   }, [address]);
 
   const fetchData = useCallback(async () => {

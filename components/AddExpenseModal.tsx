@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useAccount } from "wagmi";
 import { createExpense } from "@/lib/db";
 import { ExpenseCategory, RecurrenceFrequency, SupportedCurrency } from "@/lib/types";
 import { FREQUENCY_LABELS, getNextRecurrenceDate } from "@/lib/recurrence";
@@ -35,6 +36,7 @@ function toDateInput(value: number): string {
 }
 
 export default function AddExpenseModal({ groupId, members, currency, onClose, onAdded }: Props) {
+  const { address } = useAccount();
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState(members[0] ?? "");
@@ -102,7 +104,7 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
         ...(originalCurrency ? { originalCurrency, baseUsdAmount, baseEurAmount, fxRate } : {}),
       };
 
-      await createExpense(groupId, payload);
+      await createExpense(groupId, payload, address);
       onAdded();
     } catch (e) {
       setError("Failed to add expense.");
@@ -116,8 +118,8 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
   return (
     <>
-      {/* Backdrop */}
       <div
+        className="animate-backdrop"
         onClick={onClose}
         style={{
           position: "fixed",
@@ -128,7 +130,6 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
         }}
       />
 
-      {/* Modal container */}
       <div
         style={{
           position: "fixed",
@@ -141,7 +142,6 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
           pointerEvents: "none",
         }}
       >
-        {/* Modal */}
         <form
           onSubmit={handleSubmit}
           className="animate-scale-in"
@@ -157,7 +157,6 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
             pointerEvents: "auto",
           }}
         >
-          {/* Header */}
           <div
             style={{
               padding: "1.5rem 1.75rem 1.25rem",
@@ -180,15 +179,27 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close"
               style={{
                 width: 32, height: 32, borderRadius: 8,
                 background: "var(--surface-2)", border: "1px solid var(--border)",
                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1,
+                color: "var(--text-2)",
                 flexShrink: 0,
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--surface-3)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--surface-2)";
+                e.currentTarget.style.color = "var(--text-2)";
               }}
             >
-              ×
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
 

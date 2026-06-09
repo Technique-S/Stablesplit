@@ -25,10 +25,10 @@ interface ExportCard {
 }
 
 const CARDS: ExportCard[] = [
-  { id: "expenses", icon: "📄", title: "Expenses CSV", desc: "Date, description, category, payer, amount, and status for every expense." },
-  { id: "settlements", icon: "📄", title: "Settlements CSV", desc: "Date, payer, recipient, amount, token, and transaction hash for each settlement." },
-  { id: "activity", icon: "📄", title: "Activity CSV", desc: "Timestamp, action type, and actor name for the full activity log." },
-  { id: "pdf", icon: "📊", title: "Full Group PDF", desc: "Professional report with group info, balances, expenses, settlements, ARC metrics, and activity." },
+  { id: "expenses", icon: "csv", title: "Expenses CSV", desc: "Date, description, category, payer, amount, and status for every expense." },
+  { id: "settlements", icon: "csv", title: "Settlements CSV", desc: "Date, payer, recipient, amount, token, and transaction hash for each settlement." },
+  { id: "activity", icon: "csv", title: "Activity CSV", desc: "Timestamp, action type, and actor name for the full activity log." },
+  { id: "pdf", icon: "pdf", title: "Full Group PDF", desc: "Professional report with group info, balances, expenses, settlements, ARC metrics, and activity." },
 ];
 
 export default function ExportModal({ group, expenses, settlementPayments, activityRecords, members, balances, settlements, onClose }: Props) {
@@ -63,7 +63,7 @@ export default function ExportModal({ group, expenses, settlementPayments, activ
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "var(--overlay)", backdropFilter: "blur(4px)", zIndex: 100 }} />
+      <div onClick={onClose} className="animate-backdrop" style={{ position: "fixed", inset: 0, background: "var(--overlay)", backdropFilter: "blur(4px)", zIndex: 100 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 101, display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(0.75rem, 3vw, 2rem)", pointerEvents: "none" }}>
         <div className="animate-scale-in" style={{ width: "min(480px, 100%)", background: "var(--surface)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", overflow: "hidden", pointerEvents: "auto" }}>
           <div style={{ padding: "1.5rem 1.75rem 1.25rem", borderBottom: "1px solid var(--border)" }}>
@@ -75,7 +75,12 @@ export default function ExportModal({ group, expenses, settlementPayments, activ
                 </p>
               </div>
               {!exporting && (
-                <button type="button" onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}>×</button>
+                <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
               )}
             </div>
           </div>
@@ -109,8 +114,14 @@ export default function ExportModal({ group, expenses, settlementPayments, activ
                     onMouseEnter={(e) => { if (!exporting) { e.currentTarget.style.borderColor = "var(--blue)"; e.currentTarget.style.background = "var(--blue-light)"; } }}
                     onMouseLeave={(e) => { if (!exporting) { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--surface-2)"; } }}
                   >
-                    <span style={{ fontSize: "1.5rem" }}>
-                      {isExporting ? <span className="animate-spin" style={{ display: "inline-block" }}>⏳</span> : card.icon}
+                    <span style={{ fontSize: "1.5rem", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {isExporting ? (
+                        <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />
+                      ) : card.icon === "csv" ? (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="var(--text-2)" strokeWidth="1.5"/><path d="M8 10H16M8 14H14M8 18H12" stroke="var(--text-2)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                      ) : (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="var(--text-2)" strokeWidth="1.5"/><circle cx="16" cy="16" r="4" stroke="var(--text-2)" strokeWidth="1.5"/><path d="M16 14V18M14 16H18" stroke="var(--text-2)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                      )}
                     </span>
                     <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text)" }}>{card.title}</span>
                     <span style={{ fontSize: "0.75rem", color: "var(--text-2)", lineHeight: 1.4 }}>{card.desc}</span>

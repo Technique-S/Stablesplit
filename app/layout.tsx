@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import WalletProvider from "@/components/WalletProvider";
 import ProfileGuard from "@/components/ProfileGuard";
 import Navbar from "@/components/Navbar";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -41,7 +42,11 @@ export default async function RootLayout({
           <WalletProvider>
             <Navbar />
             <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-              <ProfileGuard>{children}</ProfileGuard>
+              <ProfileGuard>
+                <ToastProvider>
+                  {children}
+                </ToastProvider>
+              </ProfileGuard>
             </main>
           </WalletProvider>
         </ThemeProvider>

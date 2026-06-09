@@ -25,6 +25,7 @@ interface Props {
 const CURRENCIES = ["USD", "EUR", "GBP", "NGN", "JPY", "CAD", "AUD", "INR"];
 
 export default function GroupSettingsModal({ group, balances, onClose, onSaved }: Props) {
+  const { address } = useAccount();
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description ?? "");
   const [currency, setCurrency] = useState(group.currency);
@@ -118,7 +119,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
 
     onSaved(nextGroup);
     try {
-      await updateGroup(group.id, nextGroup);
+      await updateGroup(group.id, nextGroup, address);
     } catch (e) {
       setError("Failed to save group changes.");
       onSaved(group);
@@ -133,6 +134,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
     <>
       <div
         onClick={onClose}
+        className="animate-backdrop"
         style={{
           position: "fixed",
           inset: 0,
@@ -175,8 +177,11 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
                 Update group details and members
               </p>
             </div>
-            <button type="button" onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text-2)", fontSize: "1.25rem", lineHeight: 1, flexShrink: 0 }}>
-              ×
+            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
 

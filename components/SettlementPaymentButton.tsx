@@ -94,7 +94,7 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
         amount: settlement.amount,
         currency: token,
         status: "pending",
-      });
+      }, address);
       pendingRecorded = true;
 
       const result = await transferArcToken({
@@ -115,7 +115,7 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
         currency: token,
         status: "paid",
         txHash: result.txHash,
-      });
+      }, address);
 
       onStatus(`Settlement paid successfully via ${token}.`, "success");
       onPaid();
@@ -131,7 +131,7 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
           amount: settlement.amount,
           currency: token,
           status: "failed",
-        });
+        }, address);
       }
       onStatus(message, "error");
     } finally {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import Link from "next/link";
@@ -9,9 +9,10 @@ import GroupImageUpload from "@/components/GroupImageUpload";
 import { createMember, memberInitials, shortenAddress, validateEvmAddress, getAvatarColor } from "@/lib/members";
 import { Member } from "@/lib/types";
 import { useWalletReady } from "@/components/WalletProvider";
+import { useProfileCheck } from "@/lib/use-profile-check";
 import TemplatePicker from "@/components/TemplatePicker";
 import type { GroupTemplate } from "@/lib/templates";
-import { getProfileId } from "@/lib/local-profile";
+import { setProfileId } from "@/lib/local-profile";
 import { getProfile, upsertProfile, addCreatedGroupId } from "@/lib/profile";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "NGN", "JPY", "CAD", "AUD", "INR"];
@@ -29,30 +30,24 @@ export default function CreateGroupPage() {
   const [imageFile, setImageFile] = useState<Blob | null>(null);
   const { address } = useAccount();
   const walletReady = useWalletReady();
+  const { status: profileStatus, checking: profileChecking, profile, profileId } = useProfileCheck();
   const [creatorMember, setCreatorMember] = useState<Member | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
-    if (!address) {
+    if (profileStatus !== "has-profile" || !profile) {
       setCreatorMember(null);
       setProfileLoaded(true);
       return;
     }
-    const pid = getProfileId(address);
-    if (!pid) {
-      setProfileLoaded(true);
-      return;
+    if (profile.displayName) {
+      const m = createMember(profile.displayName, profile.walletAddress || "");
+      m.profileId = profileId ?? undefined;
+      m.role = "owner";
+      setCreatorMember(m);
     }
-    getProfile(pid).then((p) => {
-      if (p && p.displayName) {
-        const m = createMember(p.displayName, p.walletAddress || "");
-        m.profileId = pid;
-        m.role = "owner";
-        setCreatorMember(m);
-      }
-      setProfileLoaded(true);
-    }).catch(() => setProfileLoaded(true));
-  }, [address]);
+    setProfileLoaded(true);
+  }, [profileStatus, profile, profileId]);
 
   const addMember = () => {
     const trimmed = memberInput.trim();
@@ -90,13 +85,14 @@ export default function CreateGroupPage() {
     setLoading(true);
     setError("");
     try {
-      const profileId = getProfileId(address);
-      if (profileId) {
-        await upsertProfile({ displayName: creatorMember.displayName, walletAddress: creatorMember.walletAddress }, profileId);
+      const profile = await upsertProfile({ displayName: creatorMember.displayName, walletAddress: creatorMember.walletAddress }, address ?? "");
+      const resolvedProfileId = profile?.id ?? "";
+      if (profile?.id) {
+        setProfileId(profile.id);
       }
-      const groupId = await createGroup(name.trim(), description.trim(), allMembers, currency, {}, template?.id, profileId, address);
-      if (profileId && groupId) {
-        await addCreatedGroupId(groupId, profileId);
+      const groupId = await createGroup(name.trim(), description.trim(), allMembers, currency, {}, template?.id, resolvedProfileId, address);
+      if (resolvedProfileId && groupId) {
+        await addCreatedGroupId(groupId, resolvedProfileId, address ?? "");
       }
       if (imageFile) {
         try {
@@ -122,7 +118,22 @@ export default function CreateGroupPage() {
           Back
         </Link>
 
-        {!template ? (
+        {profileChecking ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}>
+            <div className="spinner spinner-lg" />
+          </div>
+        ) : profileStatus !== "has-profile" ? (
+          <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", fontSize: "1.25rem" }}>👤</div>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>Profile Required</h2>
+            <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
+              You need to create a profile before you can create a group.
+            </p>
+            <Link href="/create-profile" style={{ textDecoration: "none" }}>
+              <button className="btn-primary">Create Profile →</button>
+            </Link>
+          </div>
+        ) : !template ? (
           <TemplatePicker onSelect={(t) => {
             setTemplate(t);
             if (t.id !== "custom") setDescription(t.description);

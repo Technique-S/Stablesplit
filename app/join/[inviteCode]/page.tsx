@@ -6,10 +6,11 @@ import Link from "next/link";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import { getGroupByInviteCode, joinGroupByInvite } from "@/lib/db";
 import { Group } from "@/lib/types";
-import { validateEvmAddress } from "@/lib/members";
 import { useWalletReady } from "@/components/WalletProvider";
-import { getProfileId } from "@/lib/local-profile";
-import { getProfile, upsertProfile, addJoinedGroupId } from "@/lib/profile";
+import { useProfileCheck } from "@/lib/use-profile-check";
+import { setProfileId } from "@/lib/local-profile";
+import { upsertProfile, addJoinedGroupId } from "@/lib/profile";
+import { shortenAddress } from "@/lib/members";
 
 export default function JoinPage() {
   const { inviteCode } = useParams() as { inviteCode: string };
@@ -17,12 +18,12 @@ export default function JoinPage() {
   const walletReady = useWalletReady();
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
+  const { status: profileStatus, checking: profileChecking, profile } = useProfileCheck();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [joinLoading, setJoinLoading] = useState(false);
   const [name, setName] = useState("");
-  const [wallet, setWallet] = useState("");
   const [includeUnsettled, setIncludeUnsettled] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,45 +37,44 @@ export default function JoinPage() {
       .finally(() => setLoading(false));
   }, [inviteCode]);
 
-  useEffect(() => {
-    if (isConnected && address && !wallet) {
-      setWallet(address);
-    }
-  }, [isConnected, address, wallet]);
-
   const handleConnectWallet = useCallback(async () => {
     if (!walletReady) return;
     await open({ view: "Connect" });
   }, [open, walletReady]);
 
   const handleJoin = useCallback(async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) { setError("Enter your name."); return; }
-    const trimmedWallet = wallet.trim();
-
-    if (trimmedWallet && !validateEvmAddress(trimmedWallet)) {
-      setError("Enter a valid EVM wallet address.");
-      return;
-    }
-
-    setJoinLoading(true);
     setError("");
+    setJoinLoading(true);
 
     try {
-      const pid = getProfileId(address);
-      if (pid) {
-        await upsertProfile({ displayName: trimmedName, walletAddress: trimmedWallet || undefined }, pid);
+      const walletAddr = address ?? "";
+      let resolvedProfileId = "";
+
+      if (profileStatus === "has-profile" && profile) {
+        resolvedProfileId = profile.id;
+      } else {
+        const trimmedName = name.trim();
+        if (!trimmedName) { setError("Enter your name."); setJoinLoading(false); return; }
+        const result = await upsertProfile({ displayName: trimmedName, walletAddress: walletAddr }, walletAddr);
+        resolvedProfileId = result?.id ?? "";
+        if (result?.id) {
+          setProfileId(result.id);
+        }
       }
-      const result = await joinGroupByInvite(inviteCode, trimmedName, trimmedWallet || undefined, includeUnsettled, pid);
-      if (pid && result.groupId) {
-        await addJoinedGroupId(result.groupId, pid);
+
+      const displayName = profileStatus === "has-profile" && profile ? profile.displayName : name.trim();
+      const joinResult = await joinGroupByInvite(inviteCode, displayName, walletAddr, includeUnsettled, resolvedProfileId);
+
+      if (resolvedProfileId && joinResult.groupId) {
+        await addJoinedGroupId(joinResult.groupId, resolvedProfileId, walletAddr);
       }
-      router.push(`/group/${result.groupId}?joined=1`);
+
+      router.push(`/group/${joinResult.groupId}?joined=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to join group.");
       setJoinLoading(false);
     }
-  }, [name, wallet, inviteCode, router, includeUnsettled, address]);
+  }, [name, inviteCode, router, includeUnsettled, address, profileStatus, profile]);
 
   return (
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "2.5rem 1.5rem 4rem" }}>
@@ -95,6 +95,10 @@ export default function JoinPage() {
             <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>{error || "This invite link is invalid or has expired."}</p>
             <Link href="/" style={{ textDecoration: "none" }}><button className="btn-primary">Go Home</button></Link>
           </div>
+        ) : profileChecking ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}>
+            <div className="spinner spinner-lg" />
+          </div>
         ) : (
           <div className="card animate-fade-in" style={{ padding: "2rem" }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", marginBottom: "1rem" }}>
@@ -111,94 +115,135 @@ export default function JoinPage() {
               {group.members.length} member{group.members.length !== 1 ? "s" : ""} · {group.currency}
             </p>
 
-            <form
-              onSubmit={(e) => { e.preventDefault(); void handleJoin(); }}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.375rem" }}>
-                  Your Name
-                </label>
-                <input
-                  className="input-field"
-                  type="text"
-                  placeholder="Enter your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoFocus
-                  maxLength={50}
-                />
+            {!isConnected ? (
+              <div style={{ textAlign: "center" }}>
+                <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
+                  Connect your wallet to join this group.
+                </p>
+                {walletReady && (
+                  <button onClick={handleConnectWallet} className="btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+                    Connect Wallet
+                  </button>
+                )}
               </div>
+            ) : profileStatus === "has-profile" && profile ? (
+              <form
+                onSubmit={(e) => { e.preventDefault(); void handleJoin(); }}
+                style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", background: "var(--surface-2)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.875rem" }}>
+                    {profile.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>{profile.displayName}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{shortenAddress(address)}</div>
+                  </div>
+                  <div style={{ fontSize: "0.6875rem", color: "var(--green)", fontWeight: 600, background: "var(--green-light)", padding: "0.25rem 0.5rem", borderRadius: 6 }}>Profile</div>
+                </div>
 
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.375rem" }}>
-                  Wallet Address  <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(optional)</span>
+                <label
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.625rem",
+                    padding: "0.75rem 1rem", borderRadius: 8, cursor: "pointer",
+                    background: "var(--surface-2)", border: "1px solid var(--border)",
+                    fontSize: "0.8125rem", userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={includeUnsettled}
+                    onChange={(e) => setIncludeUnsettled(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: "var(--blue)", cursor: "pointer", flexShrink: 0 }}
+                  />
+                  <div>
+                    <span style={{ fontWeight: 600, color: "var(--text)" }}>Include me in all unsettled expenses</span>
+                    <br />
+                    <span style={{ color: "var(--text-3)", fontSize: "0.75rem" }}>
+                      My share will be added to expenses that haven&apos;t been settled yet.
+                    </span>
+                  </div>
                 </label>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+
+                {error && (
+                  <div style={{ padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={joinLoading}
+                  style={{ justifyContent: "center", width: "100%" }}
+                >
+                  {joinLoading ? "Joining..." : "Join Group"}
+                </button>
+              </form>
+            ) : (
+              <form
+                onSubmit={(e) => { e.preventDefault(); void handleJoin(); }}
+                style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+              >
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.375rem" }}>
+                    Your Name
+                  </label>
                   <input
                     className="input-field"
                     type="text"
-                    placeholder="0x... or connect wallet"
-                    value={wallet}
-                    onChange={(e) => setWallet(e.target.value)}
-                    style={{ flex: 1, fontFamily: "Space Mono, monospace", fontSize: "0.8125rem" }}
+                    placeholder="Enter your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoFocus
+                    maxLength={50}
                   />
-                  {walletReady && !isConnected && (
-                    <button
-                      type="button"
-                      onClick={handleConnectWallet}
-                      className="btn-secondary"
-                      style={{ padding: "0.625rem 0.75rem", whiteSpace: "nowrap", fontSize: "0.8125rem" }}
-                    >
-                      Connect
-                    </button>
-                  )}
                 </div>
-                {isConnected && address && (
-                  <p style={{ fontSize: "0.75rem", color: "var(--green)", marginTop: "0.25rem", fontWeight: 600 }}>
-                    Wallet connected: {address.slice(0, 6)}...{address.slice(-4)}
-                  </p>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", background: "var(--surface-2)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--text-3)" }}>
+                  <span style={{ fontWeight: 500 }}>Wallet:</span>
+                  <span className="mono">{shortenAddress(address)}</span>
+                </div>
+
+                <label
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.625rem",
+                    padding: "0.75rem 1rem", borderRadius: 8, cursor: "pointer",
+                    background: "var(--surface-2)", border: "1px solid var(--border)",
+                    fontSize: "0.8125rem", userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={includeUnsettled}
+                    onChange={(e) => setIncludeUnsettled(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: "var(--blue)", cursor: "pointer", flexShrink: 0 }}
+                  />
+                  <div>
+                    <span style={{ fontWeight: 600, color: "var(--text)" }}>Include me in all unsettled expenses</span>
+                    <br />
+                    <span style={{ color: "var(--text-3)", fontSize: "0.75rem" }}>
+                      My share will be added to expenses that haven&apos;t been settled yet.
+                    </span>
+                  </div>
+                </label>
+
+                {error && (
+                  <div style={{ padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
+                    {error}
+                  </div>
                 )}
-              </div>
 
-              {error && (
-                <div style={{ padding: "0.75rem 1rem", background: "var(--red-light)", border: "1px solid var(--error-border)", borderRadius: 8, fontSize: "0.8125rem", color: "var(--red)", fontWeight: 600 }}>
-                  {error}
-                </div>
-              )}
-
-              <label
-                style={{
-                  display: "flex", alignItems: "center", gap: "0.625rem",
-                  padding: "0.75rem 1rem", borderRadius: 8, cursor: "pointer",
-                  background: "var(--surface-2)", border: "1px solid var(--border)",
-                  fontSize: "0.8125rem", userSelect: "none",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={includeUnsettled}
-                  onChange={(e) => setIncludeUnsettled(e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: "var(--blue)", cursor: "pointer", flexShrink: 0 }}
-                />
-                <div>
-                  <span style={{ fontWeight: 600, color: "var(--text)" }}>Include me in all unsettled expenses</span>
-                  <br />
-                  <span style={{ color: "var(--text-3)", fontSize: "0.75rem" }}>
-                    My share will be added to expenses that haven&apos;t been settled yet.
-                  </span>
-                </div>
-              </label>
-
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={joinLoading}
-                style={{ justifyContent: "center", width: "100%" }}
-              >
-                {joinLoading ? "Joining..." : "Join Group"}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={joinLoading || !name.trim()}
+                  style={{ justifyContent: "center", width: "100%" }}
+                >
+                  {joinLoading ? "Creating Profile & Joining..." : "Create Profile & Join"}
+                </button>
+              </form>
+            )}
           </div>
         )}
       </main>

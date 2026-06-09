@@ -52,7 +52,7 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
       ref={containerRef}
       style={{
         position: "fixed",
-        bottom: isMobile ? 20 : 24,
+        bottom: isMobile ? 28 : 24,
         right: isMobile ? 20 : 24,
         zIndex: 60,
         display: "flex",
@@ -61,14 +61,13 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
         gap: 10,
       }}
     >
-      {/* Action items */}
       {actions.map((action, i) => (
         <div
           key={action.id}
           style={{
-            transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            transition: "all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
             opacity: open ? 1 : 0,
-            transform: open ? "translateY(0) scale(1)" : `translateY(${(i + 1) * 12}px) scale(0.6)`,
+            transform: open ? "translateY(0) scale(1)" : `translateY(${(i + 1) * 14}px) scale(0.5)`,
             pointerEvents: open ? "auto" : "none",
             display: "flex",
             alignItems: "center",
@@ -85,11 +84,11 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
               background: "var(--surface)",
               border: "1px solid var(--border)",
               borderRadius: 6,
-              padding: "0.25rem 0.6rem",
+              padding: "0.3rem 0.7rem",
               whiteSpace: "nowrap",
-              boxShadow: "var(--shadow-sm)",
+              boxShadow: "var(--shadow-md)",
               opacity: open ? 1 : 0,
-              transition: "opacity 0.15s ease 0.1s",
+              transition: "opacity 0.15s ease 0.08s",
               pointerEvents: "none",
             }}
           >
@@ -117,7 +116,8 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
               boxShadow: action.color
                 ? `0 4px 12px ${action.color}40`
                 : "0 4px 12px var(--blue-shadow)",
-              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+              transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease",
+              WebkitTapHighlightColor: "transparent",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "scale(1.08)";
@@ -131,13 +131,18 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
                 ? `0 4px 12px ${action.color}40`
                 : "0 4px 12px var(--blue-shadow)";
             }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = "scale(0.93)";
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = "scale(1.08)";
+            }}
           >
             {action.icon}
           </button>
         </div>
       ))}
 
-      {/* Main FAB */}
       <button
         ref={fabRef}
         type="button"
@@ -155,12 +160,13 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: "1.25rem",
+          fontSize: "1.375rem",
           fontWeight: 700,
           boxShadow: "0 6px 20px var(--blue-shadow)",
-          transition: "transform 0.25s ease, box-shadow 0.25s ease, border-radius 0.25s ease",
+          transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-radius 0.3s ease",
           transform: open ? "rotate(45deg)" : "rotate(0deg)",
           flexShrink: 0,
+          WebkitTapHighlightColor: "transparent",
         }}
         onMouseEnter={(e) => {
           if (!open) {
@@ -174,8 +180,16 @@ export default function FloatingActionMenu({ actions }: FloatingActionMenuProps)
             e.currentTarget.style.boxShadow = "0 6px 20px var(--blue-shadow)";
           }
         }}
+        onMouseDown={(e) => {
+          e.currentTarget.style.transform = open ? "rotate(45deg) scale(0.93)" : "scale(0.93)";
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.transform = open ? "rotate(45deg) scale(1.06)" : "scale(1.06)";
+        }}
       >
-        +
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M11 3V19M3 11H19" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
       </button>
     </div>
   );
