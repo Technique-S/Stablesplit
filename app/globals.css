@@ -329,6 +329,28 @@ body {
   opacity: 0.5;
 }
 
+/* ── Modal close button ── */
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  flex-shrink: 0;
+  transition: all 0.2s var(--ease-spring);
+  font-family: "DM Sans", sans-serif;
+}
+
+.modal-close-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
 /* ── Inputs ── */
 .input-field {
   width: 100%;

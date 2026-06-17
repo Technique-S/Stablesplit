@@ -48,7 +48,7 @@ export default function Modal({
   return (
     <>
       <div
-        className="animate-backdrop"
+        className="animate-backdrop theme-aware"
         onClick={onClose}
         style={{
           position: "fixed",
@@ -73,7 +73,7 @@ export default function Modal({
         <div
           ref={modalRef}
           tabIndex={-1}
-          className="animate-scale-in"
+          className="animate-modal-in theme-aware"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -113,31 +113,7 @@ export default function Modal({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-2)",
-                  fontSize: "1.25rem",
-                  lineHeight: 1,
-                  flexShrink: 0,
-                  transition: "all 0.15s ease",
-                  fontFamily: "DM Sans, sans-serif",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--surface-3)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--surface-2)";
-                  e.currentTarget.style.color = "var(--text-2)";
-                }}
+                className="modal-close-btn"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

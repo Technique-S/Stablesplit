@@ -99,7 +99,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
     let photoURL = group.photoURL;
     if (imageFile) {
       try {
-        photoURL = await uploadGroupImage(group.id, imageFile);
+        photoURL = await uploadGroupImage(group.id, imageFile, address);
       } catch {
         setError("Failed to upload image.");
         setLoading(false);
@@ -157,7 +157,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
       >
         <form
           onSubmit={handleSubmit}
-          className="animate-scale-in"
+          className="animate-modal-in"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -177,10 +177,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
                 Update group details and members
               </p>
             </div>
-            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", flexShrink: 0, transition: "all 0.15s ease" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--text-2)"; }}
-            >
+            <button type="button" onClick={onClose} aria-label="Close" className="modal-close-btn">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
