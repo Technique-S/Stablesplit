@@ -9,27 +9,31 @@
   --surface: #FFFFFF;
   --surface-2: #F1F4F9;
   --surface-3: #E8ECF3;
-  --nav-bg: rgba(255,255,255,0.85);
+  --nav-bg: rgba(255,255,255,0.30);
+  --nav-border: rgba(0,0,0,0.06);
   --border: #E2E8F0;
   --border-hover: #CBD5E1;
   --text: #0F172A;
   --text-2: #64748B;
   --text-3: #94A3B8;
-  --blue: #2563EB;
-  --blue-hover: #1D4ED8;
+  --blue: #0052FF;
+  --blue-hover: #4D7CFF;
   --blue-light: #EFF6FF;
   --blue-mid: #BFDBFE;
-  --green: #10B981;
+  --blue-shadow: rgba(0,82,255,0.30);
+  --green: #059669;
   --green-light: #ECFDF5;
-  --red: #EF4444;
+  --red: #DC2626;
   --red-light: #FEF2F2;
+  --amber: #F59E0B;
+  --amber-light: #FFFBEB;
   --error-border: #FECACA;
   --success-border: #BBF7D0;
   --overlay: rgba(15, 23, 42, 0.62);
   --avatar-ring: #FFFFFF;
   --avatar-text: #FFFFFF;
   --on-brand: #FFFFFF;
-  --avatar-1: #2563EB;
+  --avatar-1: #0052FF;
   --avatar-2: #7C3AED;
   --avatar-3: #059669;
   --avatar-4: #DC2626;
@@ -47,14 +51,18 @@
   --category-entertainment-bg: rgba(139, 92, 246, 0.1);
   --category-utilities-bg: rgba(20, 184, 166, 0.1);
   --category-other-bg: rgba(100, 116, 139, 0.12);
-  --focus-ring: rgba(37,99,235,0.1);
-  --blue-shadow: rgba(37,99,235,0.3);
+  --focus-ring: rgba(0,82,255,0.12);
   --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
   --shadow-md: 0 4px 16px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04);
   --shadow-lg: 0 12px 32px rgba(15,23,42,0.1), 0 4px 12px rgba(15,23,42,0.06);
+  --shadow-elevated: 0 8px 25px rgba(0,82,255,0.08), 0 2px 8px rgba(0,0,0,0.06);
   --radius: 14px;
   --radius-sm: 8px;
   --radius-lg: 20px;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --duration-fast: 150ms;
   --toast-bg: #0F172A;
   --toast-text: #FFFFFF;
 }
@@ -420,6 +428,11 @@ body {
 /* ── Modal backdrop ── */
 .modal-backdrop {
   animation: backdropFade 0.2s ease forwards;
+}
+
+/* ── Theme-aware transitions for inline-styled elements ── */
+.theme-aware {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 /* ── Press effect for touch devices ── */
