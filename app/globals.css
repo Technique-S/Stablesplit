@@ -261,6 +261,74 @@ body {
   transition-duration: 0.05s;
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 0.875rem;
+  padding: 0.625rem 1.25rem;
+  transition: all 0.2s var(--ease-spring);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.btn-ghost:hover {
+  background: var(--surface-2);
+}
+
+.btn-ghost:active {
+  transform: scale(0.97);
+  transition-duration: 0.05s;
+}
+
+.btn-ghost:disabled {
+  cursor: not-allowed;
+  transform: none !important;
+  opacity: 0.6;
+}
+
+.btn-danger {
+  background: var(--red);
+  color: var(--on-brand);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+  padding: 0.625rem 1.25rem;
+  transition: all 0.2s var(--ease-spring);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.btn-danger:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 4px 12px rgba(220,38,38,0.30);
+  transform: translateY(-1px);
+}
+
+.btn-danger:active {
+  transform: scale(0.97);
+  transition-duration: 0.05s;
+}
+
+.btn-danger:disabled {
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+  opacity: 0.5;
+}
+
 /* ── Inputs ── */
 .input-field {
   width: 100%;
