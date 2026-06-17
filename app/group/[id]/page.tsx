@@ -53,6 +53,9 @@ export default function GroupPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   const recurrenceGenerated = useRef(false);
+  const tabs: Tab[] = ["expenses", "balances", "settle", "history"];
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 });
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [memberFilter, setMemberFilter] = useState("__all__");
@@ -167,6 +170,14 @@ export default function GroupPage() {
     const timeout = window.setTimeout(() => setSuccessMessage(""), 3500);
     return () => window.clearTimeout(timeout);
   }, [successMessage]);
+
+  useEffect(() => {
+    const idx = tabs.indexOf(tab);
+    const el = tabRefs.current[idx];
+    if (el) {
+      setUnderlineStyle({ left: el.offsetLeft, width: el.offsetWidth });
+    }
+  }, [tab]);
 
   useEffect(() => {
     const created = searchParams.get("created");
@@ -600,34 +611,32 @@ export default function GroupPage() {
         {/* Tabs */}
         <div
           style={{
-            display: "flex", gap: "0.25rem",
-            background: "var(--surface-2)",
-            padding: "0.25rem",
-            borderRadius: 10,
-            marginBottom: "1.25rem",
-            border: "1px solid var(--border)",
+            display: "flex",
+            borderBottom: "1px solid var(--border)",
+            marginBottom: "1.5rem",
             position: "sticky",
             top: 76,
             zIndex: 40,
+            background: "var(--surface)",
           }}
         >
-          {(["expenses", "balances", "settle", "history"] as Tab[]).map((t) => (
+          {tabs.map((t, i) => (
             <button
               key={t}
+              ref={el => { tabRefs.current[i] = el; }}
               onClick={() => setTab(t)}
               style={{
-                flex: 1, padding: "0.5rem",
-                borderRadius: 7,
-                border: "none",
-                background: tab === t ? "var(--surface)" : "transparent",
-                color: tab === t ? "var(--text)" : "var(--text-2)",
-                fontWeight: tab === t ? 600 : 400,
+                flex: 1,
+                padding: "0.75rem 1rem",
                 fontSize: "0.875rem",
+                fontWeight: tab === t ? 600 : 400,
+                color: tab === t ? "var(--blue)" : "var(--text-2)",
+                background: "transparent",
+                border: "none",
                 cursor: "pointer",
-                transition: "all 0.15s",
-                boxShadow: tab === t ? "var(--shadow-sm)" : "none",
                 fontFamily: "DM Sans, sans-serif",
-                textTransform: "capitalize",
+                transition: "color 0.2s var(--ease-spring)",
+                whiteSpace: "nowrap",
               }}
             >
               {t === "settle" ? "Settle Up" : t === "history" ? "Payment History" : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -648,6 +657,19 @@ export default function GroupPage() {
               )}
             </button>
           ))}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              height: 2,
+              borderRadius: "1px 1px 0 0",
+              background: "var(--blue)",
+              transition: "left 0.3s var(--ease-spring), width 0.3s var(--ease-spring)",
+              left: underlineStyle.left,
+              width: underlineStyle.width,
+              pointerEvents: "none",
+            }}
+          />
         </div>
 
         {/* Tab: Expenses */}

@@ -99,7 +99,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
     let photoURL = group.photoURL;
     if (imageFile) {
       try {
-        photoURL = await uploadGroupImage(group.id, imageFile, address);
+        photoURL = await uploadGroupImage(group.id, imageFile);
       } catch {
         setError("Failed to upload image.");
         setLoading(false);
