@@ -451,16 +451,6 @@ body {
   100% { background-position: 200% 0; }
 }
 
-@keyframes toastIn {
-  from { opacity: 0; transform: translateY(-16px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes toastOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-16px) scale(0.96); }
-}
-
 @keyframes countUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -542,15 +532,6 @@ body {
 .stagger-children > *:nth-child(6) { animation-delay: 0.18s; }
 .stagger-children > *:nth-child(7) { animation-delay: 0.21s; }
 .stagger-children > *:nth-child(8) { animation-delay: 0.24s; }
-
-/* ── Toast ── */
-.toast-enter {
-  animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.toast-exit {
-  animation: toastOut 0.2s ease forwards;
-}
 
 .animate-modal-in {
   animation: modalScaleIn 0.35s var(--ease-spring) forwards;

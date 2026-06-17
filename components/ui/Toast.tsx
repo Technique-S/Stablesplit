@@ -4,15 +4,21 @@ import { createContext, useCallback, useContext, useState, ReactNode } from "rea
 
 type ToastKind = "success" | "error" | "info";
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: string;
   message: string;
   kind: ToastKind;
   exiting?: boolean;
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
-  toast: (message: string, kind?: ToastKind) => void;
+  toast: (message: string, kind?: ToastKind, action?: ToastAction) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -34,9 +40,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback(
-    (message: string, kind: ToastKind = "success") => {
+    (message: string, kind: ToastKind = "success", action?: ToastAction) => {
       const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, message, kind }]);
+      setToasts((prev) => [...prev, { id, message, kind, action }]);
       setTimeout(() => removeToast(id), 4000);
     },
     [removeToast]
@@ -56,11 +62,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToastContext.Provider value={{ toast: addToast }}>
+      <style>{`
+  .toast-action-btn {
+    margin-left: auto;
+    padding: 0.25rem 0.625rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: "DM Sans", sans-serif;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+  }
+  .toast-action-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+`}</style>
       {children}
       <div
         style={{
           position: "fixed",
-          top: 76,
+          top: 72,
           right: "1rem",
           zIndex: 200,
           display: "flex",
@@ -72,7 +97,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={t.exiting ? "toast-exit" : "toast-enter"}
+            className={t.exiting ? "animate-toast-out" : "animate-toast-in"}
             style={{
               display: "flex",
               alignItems: "center",
@@ -109,6 +134,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {iconMap[t.kind]}
             </span>
             {t.message}
+            {t.action && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  t.action?.onClick();
+                  removeToast(t.id);
+                }}
+                className="toast-action-btn"
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>
