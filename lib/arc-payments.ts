@@ -1,5 +1,8 @@
-import { Address, formatUnits, isAddress, parseUnits, PublicClient, WalletClient } from "viem";
+import { Address, formatUnits, parseUnits, PublicClient, WalletClient } from "viem";
 import { Settlement, SettlementToken } from "./types";
+import { validateEvmAddress } from "./members";
+
+export { validateEvmAddress };
 
 export const ARC_TOKEN_CONTRACTS: Record<SettlementToken, Address> = {
   USDC: "0x3600000000000000000000000000000000000000",
@@ -30,10 +33,6 @@ const ERC20_ABI = [
     outputs: [{ name: "success", type: "bool" }],
   },
 ] as const;
-
-export function validateEvmAddress(address: string): boolean {
-  return isAddress(address);
-}
 
 export function createSettlementKey(settlement: Settlement, _token?: SettlementToken): string {
   return encodeURIComponent(

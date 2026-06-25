@@ -63,7 +63,7 @@ export function createMember(
   };
 }
 
-export function normalizeWalletAddress(wallet: unknown): string | undefined {
+function normalizeWalletAddress(wallet: unknown): string | undefined {
   if (typeof wallet !== "string") return undefined;
   const trimmed = wallet.trim();
   return trimmed || undefined;
@@ -150,7 +150,7 @@ export function memberWalletMap(members: Member[]): Record<string, string> {
   ) as Record<string, string>;
 }
 
-export function findMember(members: Member[], idOrName: string): Member | undefined {
+function findMember(members: Member[], idOrName: string): Member | undefined {
   return members.find(
     (member) => member.id === idOrName || member.displayName.toLowerCase() === idOrName.toLowerCase()
   );
@@ -158,4 +158,14 @@ export function findMember(members: Member[], idOrName: string): Member | undefi
 
 export function getMemberWallet(members: Member[], idOrName: string): string {
   return findMember(members, idOrName)?.walletAddress?.trim() ?? "";
+}
+
+export function extractMemberAddresses(members: Member[]): string[] {
+  return [
+    ...new Set(
+      members
+        .map((m) => m.walletAddress?.toLowerCase())
+        .filter((w): w is string => Boolean(w))
+    ),
+  ];
 }

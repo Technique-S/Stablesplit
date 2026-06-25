@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
+import { shortenAddress } from "@/lib/members";
 import ProfileAvatarUpload from "@/components/ProfileAvatarUpload";
 import { useProfileCheck } from "@/lib/use-profile-check";
 import { setProfileId } from "@/lib/local-profile";
@@ -109,7 +110,7 @@ export default function CreateProfilePage() {
               </label>
               <input
                 className="input-field mono"
-                value={address ? `${address.slice(0, 10)}...${address.slice(-6)}` : ""}
+                value={address ? shortenAddress(address) : ""}
                 readOnly
                 style={{ fontSize: "0.8125rem", opacity: 0.7, cursor: "not-allowed" }}
               />

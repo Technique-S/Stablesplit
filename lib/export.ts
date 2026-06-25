@@ -1,4 +1,5 @@
 import type { Expense, SettlementPayment, ActivityRecord, Group, Member, Balance, Settlement } from "./types";
+import { shortenAddress } from "@/lib/members";
 
 function escapeCSV(val: string | number | undefined | null): string {
   if (val == null) return "";
@@ -137,7 +138,7 @@ export async function downloadPDF(
     <tbody>`;
   for (const b of balances) {
     const m = members.find((mem) => mem.displayName === b.member);
-    const wallet = m?.walletAddress ? m.walletAddress.slice(0, 6) + "..." + m.walletAddress.slice(-4) : "—";
+    const wallet = m?.walletAddress ? shortenAddress(m.walletAddress) : "—";
     const sign = b.net >= 0 ? "+" : "";
     html += `<tr><td style="${td()}">${escapeCSV(b.member)}</td><td style="${td()};color:${muted}">${wallet}</td><td style="${td()};font-weight:600;color:${b.net >= 0 ? "#16a34a" : "#dc2626"}">${sign}${escapeCSV(group.currency)} ${b.net.toFixed(2)}</td></tr>`;
   }

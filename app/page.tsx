@@ -9,7 +9,7 @@ import { useProfileCheck } from "@/lib/use-profile-check";
 import { getGroupsByIds, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/db";
 import { getProfileId } from "@/lib/local-profile";
 import { Group, Balance, SettlementPayment, ActivityRecord } from "@/lib/types";
-import { memberInitials, memberNames } from "@/lib/members";
+import { memberInitials, memberNames, getAvatarColor } from "@/lib/members";
 import { CardSkeleton, ActivitySkeleton } from "@/components/ui/Skeleton";
 
 interface GroupBalance {
@@ -255,13 +255,6 @@ export default function DashboardPage() {
     [groupBalances]
   );
 
-  const avatarColor = (name: string) => {
-    const colors = ["var(--avatar-1)", "var(--avatar-2)", "var(--avatar-3)", "var(--avatar-4)", "var(--avatar-5)", "var(--avatar-6)"];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
-
   const formatTime = (ts: number) => {
     const diff = Date.now() - ts;
     if (diff < 60000) return "Just now";
@@ -416,7 +409,7 @@ export default function DashboardPage() {
                           {group.photoURL ? (
                             <img src={group.photoURL} alt={group.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : (
-                            <div style={{ width: "100%", height: "100%", background: avatarColor(group.name), display: "flex", alignItems: "center", justifyContent: "center", color: "var(--avatar-text)", fontWeight: 700, fontSize: "1rem", letterSpacing: "-0.01em" }}>
+                            <div style={{ width: "100%", height: "100%", background: getAvatarColor(group.name), display: "flex", alignItems: "center", justifyContent: "center", color: "var(--avatar-text)", fontWeight: 700, fontSize: "1rem", letterSpacing: "-0.01em" }}>
                               {group.name.slice(0, 2).toUpperCase()}
                             </div>
                           )}
@@ -460,7 +453,7 @@ export default function DashboardPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "auto" }}>
                         <div style={{ display: "flex" }}>
                           {group.members.slice(0, 4).map((m, idx) => (
-                            <div key={m.id} style={{ width: 26, height: 26, borderRadius: "50%", background: m.avatarColor ?? avatarColor(m.displayName), border: "2px solid var(--avatar-ring)", marginLeft: idx === 0 ? 0 : -8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.625rem", fontWeight: 700, color: "var(--avatar-text)", zIndex: idx }}>
+                            <div key={m.id} style={{ width: 26, height: 26, borderRadius: "50%", background: m.avatarColor ?? getAvatarColor(m.displayName), border: "2px solid var(--avatar-ring)", marginLeft: idx === 0 ? 0 : -8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.625rem", fontWeight: 700, color: "var(--avatar-text)", zIndex: idx }}>
                               {memberInitials(m).slice(0, 1)}
                             </div>
                           ))}

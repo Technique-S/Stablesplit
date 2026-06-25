@@ -1,42 +1,21 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const upsertSchema = z.object({
-  groupId: z.string().min(1),
-  settlementKey: z.string().min(1),
-  from: z.string().min(1),
-  to: z.string().min(1),
-  payerWallet: z.string().optional(),
-  receiverWallet: z.string().optional(),
-  amount: z.number().positive(),
-  currency: z.enum(["USDC", "EUR"]),
-  status: z.enum(["pending", "paid", "failed"]),
-  txHash: z.string().optional(),
-  batchId: z.string().optional(),
-  createdAt: z.number().optional(),
-});
+import { settlementSchema } from "@/lib/schemas";
+import { toMillis } from "@/lib/timestamp";
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);
     const body = await request.json();
-    const parsed = upsertSchema.parse(body);
+    const parsed = settlementSchema.parse(body);
 
     const groupSnap = await adminDb.collection("groups").doc(parsed.groupId).get();
     if (!groupSnap.exists) {
       return errorResponse("Group not found.", 404);
     }
     const groupData = groupSnap.data()!;
-    const createdBy = String(groupData.createdBy ?? "").toLowerCase();
-    const memberAddresses: string[] = Array.isArray(groupData.memberAddresses) ? groupData.memberAddresses : [];
-    const members: Array<Record<string, unknown>> = Array.isArray(groupData.members) ? groupData.members : [];
-
-    if (createdBy !== auth.walletAddress && !memberAddresses.includes(auth.walletAddress) &&
-        !members.some((m) => String(m.walletAddress ?? "").toLowerCase() === auth.walletAddress)) {
-      return errorResponse("You are not a member of this group.", 403);
-    }
+    assertGroupMembership(groupData, auth.walletAddress);
 
     const ref = adminDb.collection("groups").doc(parsed.groupId).collection("settlementPayments").doc(parsed.settlementKey);
     const existing = await ref.get();
@@ -94,7 +73,7 @@ export async function POST(request: NextRequest) {
     const nestedExpenses = await adminDb.collection("groups").doc(parsed.groupId).collection("expenses").get();
     nestedExpenses.forEach((doc) => {
       const d = doc.data();
-      const createdAt = d.createdAt?.toMillis?.() ?? d.createdAt ?? 0;
+      const createdAt = toMillis(d.createdAt);
       if (!d.lockedAt && createdAt <= settlementAt) {
         batch.set(doc.ref, { lockedAt: settlementAt }, { merge: true });
       }
@@ -103,7 +82,7 @@ export async function POST(request: NextRequest) {
     const legacyExpenses = await adminDb.collection("expenses").where("groupId", "==", parsed.groupId).get();
     legacyExpenses.forEach((doc) => {
       const d = doc.data();
-      const createdAt = d.createdAt?.toMillis?.() ?? d.createdAt ?? 0;
+      const createdAt = toMillis(d.createdAt);
       if (!d.lockedAt && createdAt <= settlementAt) {
         batch.set(doc.ref, { lockedAt: settlementAt }, { merge: true });
       }
@@ -122,9 +101,8 @@ export async function POST(request: NextRequest) {
 
     return okResponse({ success: true });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "settlements.POST");
   }
 }
@@ -168,9 +146,9 @@ export async function GET(request: NextRequest) {
           settlementStatus: status,
           batchId: data.batchId ?? undefined,
           txHash: data.txHash ?? "",
-          settledAt: data.settledAt?.toMillis?.() ?? data.settledAt ?? undefined,
-          createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? 0,
-          updatedAt: data.updatedAt?.toMillis?.() ?? data.updatedAt ?? 0,
+          settledAt: data.settledAt ? toMillis(data.settledAt) : undefined,
+          createdAt: toMillis(data.createdAt),
+          updatedAt: toMillis(data.updatedAt),
         });
       }
     });

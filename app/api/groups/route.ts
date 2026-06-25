@@ -1,18 +1,8 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const createGroupSchema = z.object({
-  name: z.string().min(1).max(100).transform((s) => s.trim()),
-  description: z.string().max(500).default("").transform((s) => s.trim()),
-  members: z.array(z.record(z.unknown())).min(1),
-  memberWallets: z.record(z.string()).optional(),
-  currency: z.string().length(3).default("USD"),
-  templateType: z.string().optional(),
-  profileId: z.string().optional(),
-  createdBy: z.string().optional(),
-});
+import { groupBaseSchema } from "@/lib/schemas";
+import { toMillis } from "@/lib/timestamp";
 
 function generateInviteCode(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -50,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);
     const body = await request.json();
-    const parsed = createGroupSchema.parse(body);
+    const parsed = groupBaseSchema.parse(body);
 
     const callerWallet = parsed.createdBy ?? auth.walletAddress;
     const inviteCode = generateInviteCode();
@@ -119,9 +109,13 @@ export async function POST(request: NextRequest) {
 
     return okResponse({ groupId }, 201);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
+    console.error("[groups.POST] Full error:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    });
     return handleError(error, "groups.POST");
   }
 }
@@ -145,7 +139,7 @@ export async function GET(request: NextRequest) {
       const snap = await adminDb.collection("groups").where("__name__", "in", batch).get();
       snap.forEach((doc) => {
         const data = doc.data();
-        const createdAt = data.createdAt?.toMillis?.() ?? data.createdAt ?? 0;
+        const createdAt = toMillis(data.createdAt);
         const memberWallets = data.memberWallets ?? {};
         groups.push({
           id: doc.id,
@@ -155,7 +149,7 @@ export async function GET(request: NextRequest) {
           memberWallets,
           currency: data.currency ?? "USD",
           createdAt,
-          firstSettlementAt: data.firstSettlementAt?.toMillis?.() ?? data.firstSettlementAt ?? undefined,
+          firstSettlementAt: data.firstSettlementAt ? toMillis(data.firstSettlementAt) : undefined,
           isDemo: data.isDemo ?? false,
           inviteCode: data.inviteCode ?? undefined,
           photoURL: data.photoURL ?? undefined,

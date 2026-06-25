@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  addDoc,
   getDoc,
   getDocs,
   query,
@@ -10,18 +9,10 @@ import {
   updateDoc,
   writeBatch,
   serverTimestamp,
-  Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { ActivityEventType, AppNotification, Member } from "./types";
-
-export function toMillis(value: unknown): number {
-  if (typeof value === "number") return value;
-  if (value && typeof value === "object" && "toMillis" in value) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  return Date.now();
-}
+import { toMillis } from "./timestamp";
 
 function mapNotification(id: string, data: Record<string, unknown>): AppNotification {
   return {
@@ -164,7 +155,7 @@ export async function getUnreadCount(profileId: string): Promise<number> {
   }
 }
 
-export async function getUnreadNotifications(profileId: string, limitCount = 50): Promise<AppNotification[]> {
+async function getUnreadNotifications(profileId: string, limitCount = 50): Promise<AppNotification[]> {
   if (!profileId) return [];
   try {
     const snap = await getDocs(

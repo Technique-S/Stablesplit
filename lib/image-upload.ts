@@ -61,6 +61,4 @@ export function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
-export function revokeObjectURL(url: string): void {
-  URL.revokeObjectURL(url);
-}
+

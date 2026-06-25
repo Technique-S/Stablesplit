@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, ReactNode } from "react";
 
-export interface FabAction {
+interface FabAction {
   id: string;
   label: string;
   icon: ReactNode;

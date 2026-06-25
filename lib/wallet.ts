@@ -4,6 +4,7 @@ import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { createStorage, http, noopStorage } from "wagmi";
 import { defineChain } from "viem";
+import { shortenAddress as _shortenAddress, validateEvmAddress } from "./members";
 
 export const ARC_TESTNET_ID = 5042002;
 export const ARC_TESTNET_RPC_URL = "https://rpc.testnet.arc.network";
@@ -83,9 +84,14 @@ export function initAppKit() {
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
 
 export function shortAddress(address?: string) {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return _shortenAddress(address);
 }
+
+export function normalizeAddress(address: unknown): string {
+  return String(address ?? "").trim().toLowerCase();
+}
+
+
 
 export async function addArcTestnetToInjectedWallet() {
   if (typeof window === "undefined") return;

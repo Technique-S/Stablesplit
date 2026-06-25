@@ -20,10 +20,12 @@ import { onSnapshot, doc, collection, DocumentData, QueryDocumentSnapshot } from
 import { db } from "@/lib/firebase";
 import { ActivityRecord, Group, Expense, Member, SettlementPayment, SettlementToken, RecurrenceFrequency } from "@/lib/types";
 import { generateNextOccurrence, pauseRecurrence, resumeRecurrence, deleteRecurrence, FREQUENCY_LABELS } from "@/lib/recurrence";
-import { calculateBalances, calculateSettlements, calculateNaiveSettlementCount, CATEGORY_BACKGROUNDS, CATEGORY_ICONS, normalizeExpenses } from "@/lib/calculations";
+import { calculateBalances, calculateSettlements, calculateNaiveSettlementCount, CATEGORY_BACKGROUNDS, CATEGORY_ICONS, normalizeExpenses, computeAdjustedBalances } from "@/lib/calculations";
 import { createSettlementKey } from "@/lib/arc-payments";
 import { ARC_TESTNET_EXPLORER_URL } from "@/lib/wallet";
-import { getMemberWallet, memberInitials, memberNames, shortenAddress } from "@/lib/members";
+import { getMemberWallet, memberInitials, memberNames, shortenAddress, getAvatarColor } from "@/lib/members";
+import { formatDateTime, groupActivityByDate, getPaymentDate, startOfDay, startOfWeek, startOfMonth, startOfNextMonth } from "@/lib/date-utils";
+import { activityIcon, activityIconLabel, activityIconBackground, activityIconColor, activityShortType, formatActivityMetadata, shortenHash } from "@/lib/activity-helpers";
 
 type Tab = "expenses" | "balances" | "settle" | "history";
 
@@ -225,13 +227,6 @@ export default function GroupPage() {
     setShowActivity(true);
   };
 
-  const avatarColor = (name: string) => {
-    const colors = ["var(--avatar-1)", "var(--avatar-2)", "var(--avatar-3)", "var(--avatar-4)", "var(--avatar-5)", "var(--avatar-6)"];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
-
   const handleDeleteExpense = async () => {
     if (!deletingExpense) return;
     if (deletingExpense.lockedAt) {
@@ -343,16 +338,7 @@ export default function GroupPage() {
   // Pick settlement set matching the selected token
   const activeAdjustedSettlements = paymentToken === "USDC" ? usdAdjustedSettlements : eurAdjustedSettlements;
 
-  const paidSettlementAdjustments = new Map<string, number>();
-  for (const payment of completedPayments) {
-    const amt = payment.amount;
-    paidSettlementAdjustments.set(payment.from, (paidSettlementAdjustments.get(payment.from) ?? 0) + amt);
-    paidSettlementAdjustments.set(payment.to, (paidSettlementAdjustments.get(payment.to) ?? 0) - amt);
-  }
-  const adjustedBalances = balances.map((b) => ({
-    member: b.member,
-    net: b.net + (paidSettlementAdjustments.get(b.member) ?? 0),
-  }));
+  const adjustedBalances = computeAdjustedBalances(balances, completedPayments);
   const adjustedSettlements = calculateSettlements(adjustedBalances);
   const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
   const groupMemberNames = memberNames(group.members);
@@ -422,7 +408,7 @@ export default function GroupPage() {
                 ) : (
                   <div style={{
                     width: "100%", height: "100%",
-                    background: avatarColor(group.name),
+                    background: getAvatarColor(group.name),
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: "var(--avatar-text)", fontWeight: 700, fontSize: "1.125rem",
                   }}>
@@ -520,7 +506,7 @@ export default function GroupPage() {
               >
                 <div style={{
                   width: 20, height: 20, borderRadius: "50%",
-                  background: m.avatarColor ?? avatarColor(m.displayName),
+                  background: m.avatarColor ?? getAvatarColor(m.displayName),
                   display: "flex", alignItems: "center", justifyContent: "center",
                   color: "var(--avatar-text)", fontSize: "0.5625rem", fontWeight: 700,
                 }}>
@@ -1062,7 +1048,7 @@ export default function GroupPage() {
                 <div key={b.member} className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: "50%",
-                    background: avatarColor(b.member),
+                    background: getAvatarColor(b.member),
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: "var(--avatar-text)", fontWeight: 700,
                   }}>
@@ -1178,7 +1164,7 @@ export default function GroupPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <div style={{
                           width: 34, height: 34, borderRadius: "50%",
-                          background: avatarColor(s.from),
+                          background: getAvatarColor(s.from),
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: "var(--avatar-text)", fontWeight: 700, fontSize: "0.8125rem",
                         }}>
@@ -1222,7 +1208,7 @@ export default function GroupPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <div style={{
                           width: 34, height: 34, borderRadius: "50%",
-                          background: avatarColor(s.to),
+                          background: getAvatarColor(s.to),
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: "var(--avatar-text)", fontWeight: 700, fontSize: "0.8125rem",
                         }}>
@@ -1883,100 +1869,4 @@ function DetailRow({ label, value, mono = false }: { label: string; value: strin
   );
 }
 
-function getPaymentDate(payment: SettlementPayment): number {
-  return payment.settledAt ?? payment.updatedAt ?? payment.createdAt;
-}
 
-function formatDateTime(value: number): string {
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function groupActivityByDate(activity: ActivityRecord[]): Record<string, ActivityRecord[]> {
-  return activity.reduce<Record<string, ActivityRecord[]>>((groups, record) => {
-    const label = new Date(record.createdAt).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    groups[label] = groups[label] ?? [];
-    groups[label].push(record);
-    return groups;
-  }, {});
-}
-
-function activityIcon(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.created") return "+";
-  if (eventType === "expense.deleted") return "-";
-  if (eventType === "wallet.linked" || eventType === "wallet.updated") return "W";
-  if (eventType === "settlement.completed") return "✓";
-  if (eventType === "invite.generated" || eventType === "member.joined_via_invite") return "🔗";
-  if (eventType.startsWith("batch.")) return "B";
-  if (eventType.startsWith("group.")) return "G";
-  if (eventType.startsWith("member.")) return "M";
-  if (eventType.startsWith("settlement.")) return "$";
-  return "i";
-}
-
-function activityIconLabel(eventType: ActivityRecord["eventType"]): string {
-  return activityShortType(eventType);
-}
-
-function activityIconBackground(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.deleted" || eventType === "settlement.failed" || eventType === "group.deleted" || eventType === "batch.settlement_failed") return "var(--red-light)";
-  if (eventType === "settlement.completed" || eventType === "wallet.linked" || eventType === "member.joined_via_invite" || eventType === "batch.settlement_completed") return "var(--green-light)";
-  if (eventType === "expense.created" || eventType === "wallet.updated" || eventType === "invite.generated" || eventType === "batch.settlement_initiated") return "var(--blue-light)";
-  return "var(--surface-2)";
-}
-
-function activityIconColor(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.deleted" || eventType === "settlement.failed" || eventType === "group.deleted" || eventType === "batch.settlement_failed") return "var(--red)";
-  if (eventType === "settlement.completed" || eventType === "wallet.linked" || eventType === "member.joined_via_invite" || eventType === "batch.settlement_completed") return "var(--green)";
-  if (eventType === "expense.created" || eventType === "wallet.updated" || eventType === "invite.generated" || eventType === "batch.settlement_initiated") return "var(--blue)";
-  return "var(--text-2)";
-}
-
-function activityShortType(eventType: ActivityRecord["eventType"]): string {
-  return eventType.split(".").map((part) => part.charAt(0).toUpperCase() + part.slice(1).replace("_", " ")).join(" ");
-}
-
-function formatActivityMetadata(metadata: Record<string, unknown>): string {
-  const visibleEntries = Object.entries(metadata).filter(([, value]) => value !== "" && value !== undefined && value !== null);
-  return visibleEntries
-    .slice(0, 4)
-    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
-    .join(" · ");
-}
-
-function shortenHash(hash: string): string {
-  if (hash.length <= 14) return hash;
-  return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
-}
-
-function startOfDay(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-function startOfWeek(ts: number): number {
-  const d = new Date(ts);
-  const day = d.getDay();
-  return startOfDay(ts) - day * 86400000;
-}
-
-function startOfMonth(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-}
-
-function startOfNextMonth(ts: number): number {
-  const d = new Date(ts);
-  const m = d.getMonth() + 1;
-  return new Date(d.getFullYear(), m, 1).getTime();
-}

@@ -1,11 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  turbopack: {
-    resolveAlias: {
-      accounts: "./lib/wallet-empty-accounts.ts",
-    },
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

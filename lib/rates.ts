@@ -39,7 +39,7 @@ function saveToCache(rates: Record<string, number>): void {
   }
 }
 
-export async function fetchRates(): Promise<Record<string, number>> {
+async function fetchRates(): Promise<Record<string, number>> {
   const resp = await fetch(`${BASE_URL}/${API_KEY}/latest/USD`);
   if (!resp.ok) throw new Error(`Exchange rate API error: ${resp.status}`);
   const data = await resp.json();

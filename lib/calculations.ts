@@ -1,4 +1,4 @@
-import { Expense, Balance, Member, Settlement } from "./types";
+import { Expense, Balance, Member, Settlement, SettlementPayment } from "./types";
 import { memberNames } from "./members";
 
 const CENTS = 100;
@@ -114,15 +114,6 @@ export const CATEGORY_ICONS: Record<string, string> = {
   other: "📦",
 };
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  food: "var(--category-food)",
-  transport: "var(--category-transport)",
-  accommodation: "var(--category-accommodation)",
-  entertainment: "var(--category-entertainment)",
-  utilities: "var(--category-utilities)",
-  other: "var(--category-other)",
-};
-
 export const CATEGORY_BACKGROUNDS: Record<string, string> = {
   food: "var(--category-food-bg)",
   transport: "var(--category-transport-bg)",
@@ -131,3 +122,19 @@ export const CATEGORY_BACKGROUNDS: Record<string, string> = {
   utilities: "var(--category-utilities-bg)",
   other: "var(--category-other-bg)",
 };
+
+export function computeAdjustedBalances(
+  balances: Balance[],
+  completedPayments: SettlementPayment[]
+): Balance[] {
+  const adjustments = new Map<string, number>();
+  for (const payment of completedPayments) {
+    const amt = payment.amount;
+    adjustments.set(payment.from, (adjustments.get(payment.from) ?? 0) + amt);
+    adjustments.set(payment.to, (adjustments.get(payment.to) ?? 0) - amt);
+  }
+  return balances.map((b) => ({
+    member: b.member,
+    net: b.net + (adjustments.get(b.member) ?? 0),
+  }));
+}

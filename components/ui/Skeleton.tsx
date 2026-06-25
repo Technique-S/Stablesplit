@@ -1,6 +1,6 @@
 "use client";
 
-export function Skeleton({ width, height, borderRadius = 6 }: { width?: string; height?: number; borderRadius?: number }) {
+function Skeleton({ width, height, borderRadius = 6 }: { width?: string; height?: number; borderRadius?: number }) {
   return (
     <div
       className="skeleton"

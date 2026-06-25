@@ -1,15 +1,7 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const activitySchema = z.object({
-  groupId: z.string().min(1),
-  eventType: z.string().min(1),
-  description: z.string().min(1),
-  metadata: z.record(z.unknown()).default({}),
-  actorName: z.string().default("StableSplit"),
-});
+import { activitySchema } from "@/lib/schemas";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,12 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const groupData = groupSnap.data()!;
-    const createdBy = String(groupData.createdBy ?? "").toLowerCase();
-    const memberAddresses: string[] = Array.isArray(groupData.memberAddresses) ? groupData.memberAddresses : [];
-
-    if (createdBy !== auth.walletAddress && !memberAddresses.includes(auth.walletAddress)) {
-      return errorResponse("You are not a member of this group.", 403);
-    }
+    assertGroupMembership(groupData, auth.walletAddress);
 
     await adminDb.collection("groups").doc(parsed.groupId).collection("activity").add({
       groupId: parsed.groupId,
@@ -41,9 +28,8 @@ export async function POST(request: NextRequest) {
 
     return okResponse({ success: true }, 201);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "activity.POST");
   }
 }

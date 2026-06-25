@@ -1,18 +1,7 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const updateExpenseSchema = z.object({
-  groupId: z.string().min(1),
-  description: z.string().min(1).max(200).optional(),
-  amount: z.number().positive().optional(),
-  paidBy: z.string().min(1).optional(),
-  splitAmong: z.array(z.string()).min(1).optional(),
-  category: z.enum(["food", "transport", "accommodation", "entertainment", "utilities", "other"]).optional(),
-  date: z.number().optional(),
-  notes: z.string().optional(),
-});
+import { updateExpenseSchema } from "@/lib/schemas";
 
 async function getExpenseRef(groupId: string, expenseId: string) {
   const nestedRef = adminDb.collection("groups").doc(groupId).collection("expenses").doc(expenseId);
@@ -35,20 +24,14 @@ export async function PATCH(
     const { id: expenseId } = await params;
     const body = await request.json();
     const parsed = updateExpenseSchema.parse(body);
+    if (!parsed.groupId) return errorResponse("groupId is required.", 400);
 
     const groupSnap = await adminDb.collection("groups").doc(parsed.groupId).get();
     if (!groupSnap.exists) {
       return errorResponse("Group not found.", 404);
     }
     const groupData = groupSnap.data()!;
-    const createdBy = String(groupData.createdBy ?? "").toLowerCase();
-    const memberAddresses: string[] = Array.isArray(groupData.memberAddresses) ? groupData.memberAddresses : [];
-    const members: Array<Record<string, unknown>> = Array.isArray(groupData.members) ? groupData.members : [];
-
-    if (createdBy !== auth.walletAddress && !memberAddresses.includes(auth.walletAddress) &&
-        !members.some((m) => String(m.walletAddress ?? "").toLowerCase() === auth.walletAddress)) {
-      return errorResponse("You are not a member of this group.", 403);
-    }
+    assertGroupMembership(groupData, auth.walletAddress);
 
     const { ref, snap } = await getExpenseRef(parsed.groupId, expenseId);
     if (!snap.exists) {
@@ -76,9 +59,8 @@ export async function PATCH(
     await ref.update(updatePayload);
     return okResponse({ success: true });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "expenses/[id].PATCH");
   }
 }
@@ -100,14 +82,7 @@ export async function DELETE(
       return errorResponse("Group not found.", 404);
     }
     const groupData = groupSnap.data()!;
-    const createdBy = String(groupData.createdBy ?? "").toLowerCase();
-    const memberAddresses: string[] = Array.isArray(groupData.memberAddresses) ? groupData.memberAddresses : [];
-    const members: Array<Record<string, unknown>> = Array.isArray(groupData.members) ? groupData.members : [];
-
-    if (createdBy !== auth.walletAddress && !memberAddresses.includes(auth.walletAddress) &&
-        !members.some((m) => String(m.walletAddress ?? "").toLowerCase() === auth.walletAddress)) {
-      return errorResponse("You are not a member of this group.", 403);
-    }
+    assertGroupMembership(groupData, auth.walletAddress);
 
     const { ref, snap } = await getExpenseRef(groupId, expenseId);
     if (!snap.exists) {

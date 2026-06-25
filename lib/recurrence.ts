@@ -30,11 +30,6 @@ export const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
   yearly: "Yearly",
 };
 
-export function formatRecurrenceDescription(config: RecurrenceConfig): string {
-  if (config.isPaused) return `${FREQUENCY_LABELS[config.frequency]} (paused)`;
-  return FREQUENCY_LABELS[config.frequency];
-}
-
 export async function generateNextOccurrence(groupId: string, expenseId: string): Promise<void> {
   const ref = doc(db, "groups", groupId, "expenses", expenseId);
   const snap = await getDoc(ref);

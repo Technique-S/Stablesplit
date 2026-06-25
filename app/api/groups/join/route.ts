@@ -1,21 +1,13 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const joinSchema = z.object({
-  inviteCode: z.string().min(1),
-  displayName: z.string().min(1).max(100).transform((s) => s.trim()),
-  walletAddress: z.string().optional(),
-  includeInUnsettled: z.boolean().optional(),
-  profileId: z.string().optional(),
-});
+import { joinGroupSchema } from "@/lib/schemas";
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);
     const body = await request.json();
-    const parsed = joinSchema.parse(body);
+    const parsed = joinGroupSchema.parse(body);
 
     const walletTrimmed = (parsed.walletAddress ?? "").trim();
 
@@ -138,9 +130,8 @@ export async function POST(request: NextRequest) {
 
     return okResponse({ groupId, groupName, alreadyMember: false });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "groups/join.POST");
   }
 }

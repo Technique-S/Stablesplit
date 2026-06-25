@@ -27,8 +27,8 @@ import {
   ActivityRecord,
 } from "./types";
 import { MemberRecord, memberWalletMap, normalizeMembers, createMember } from "./members";
-import { notifyGroupMembers, notifySpecificMembers } from "./notifications";
 import { apiRequest } from "./api-client";
+import { toMillis } from "./timestamp";
 
 function logFirestoreError(operation: string, context: Record<string, unknown>, error: unknown): void {
   console.error(`[Firestore:${operation}]`, {
@@ -36,14 +36,6 @@ function logFirestoreError(operation: string, context: Record<string, unknown>, 
     error,
     message: error instanceof Error ? error.message : String(error),
   });
-}
-
-export function toMillis(value: unknown): number {
-  if (typeof value === "number") return value;
-  if (value && typeof value === "object" && "toMillis" in value) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  return Date.now();
 }
 
 export function mapGroup(snap: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>): Group {
@@ -323,19 +315,6 @@ export async function getGroup(id: string): Promise<Group | null> {
   }
 }
 
-export async function getAllGroups(): Promise<Group[]> {
-  try {
-    const snap = await getDocs(collection(db, "groups"));
-    return snap.docs.map(mapGroup).sort((a, b) => b.createdAt - a.createdAt);
-  } catch (error) {
-    logFirestoreError("getAllGroups", {
-      collection: "groups",
-      compositeIndexRequired: false,
-    }, error);
-    return [];
-  }
-}
-
 export async function getGroupsByIds(ids: string[]): Promise<Group[]> {
   if (!ids.length) return [];
   try {
@@ -354,17 +333,6 @@ export async function getGroupsByIds(ids: string[]): Promise<Group[]> {
     logFirestoreError("getGroupsByIds", { count: ids.length }, error);
     return [];
   }
-}
-
-export async function addMemberToGroup(
-  groupId: string,
-  member: MemberRecord,
-  walletAddress?: string
-): Promise<void> {
-  await apiRequest("PATCH", `/api/groups/${groupId}`, {
-    operation: "addMember",
-    member,
-  }, walletAddress);
 }
 
 export async function updateGroup(
@@ -401,18 +369,6 @@ export async function deleteGroup(groupId: string, walletAddress?: string): Prom
 }
 
 // Expenses
-export async function addExpense(
-  groupId: string,
-  description: string,
-  amount: number,
-  paidBy: string,
-  splitAmong: string[],
-  category: ExpenseCategory,
-  walletAddress?: string
-): Promise<string> {
-  return createExpense(groupId, { description, amount, paidBy, splitAmong, category }, walletAddress);
-}
-
 export async function createExpense(
   groupId: string,
   expense: ExpenseInput,

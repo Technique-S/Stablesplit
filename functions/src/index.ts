@@ -1,32 +1,50 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
 import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/https";
+import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
+import {initializeApp, cert} from "firebase-admin/app";
+import {getFirestore} from "firebase-admin/firestore";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+setGlobalOptions({maxInstances: 10});
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+if (raw) {
+  try {
+    initializeApp({credential: cert(JSON.parse(raw))});
+  } catch (e) {
+    console.error("Failed to initialize Firebase Admin:", (e as Error).message);
+  }
+}
+const db = getFirestore();
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+export const api = onRequest({cors: true}, (req, res) => {
+  logger.info("StableSplit Cloud Function invoked", {method: req.method, path: req.path});
+  res.json({status: "ok", service: "stablesplit", timestamp: Date.now()});
+});
+
+export const onExpenseCreated = onDocumentCreated(
+  "groups/{groupId}/expenses/{expenseId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const expense = snap.data();
+    logger.info("Expense created", {expenseId: event.params.expenseId, amount: expense.amount});
+  }
+);
+
+export const onSettlementCompleted = onDocumentCreated(
+  "groups/{groupId}/settlementPayments/{paymentId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const payment = snap.data();
+    if (payment.settlementStatus === "paid" || payment.status === "paid") {
+      logger.info("Settlement completed", {
+        paymentId: event.params.paymentId,
+        from: payment.from,
+        to: payment.to,
+        amount: payment.amount,
+      });
+    }
+  }
+);

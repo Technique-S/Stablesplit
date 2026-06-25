@@ -8,8 +8,10 @@ import { db } from "@/lib/firebase";
 import { Group, Expense, SettlementPayment, ActivityRecord, Balance } from "@/lib/types";
 import { useProfileCheck } from "@/lib/use-profile-check";
 import { mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/db";
-import { calculateBalances, calculateSettlements, CATEGORY_ICONS, CATEGORY_BACKGROUNDS } from "@/lib/calculations";
+import { calculateBalances, calculateSettlements, CATEGORY_ICONS, CATEGORY_BACKGROUNDS, computeAdjustedBalances } from "@/lib/calculations";
 import { getAvatarColor, memberInitials } from "@/lib/members";
+import { formatDate, formatDateTime, groupActivityByDate } from "@/lib/date-utils";
+import { activityIcon, activityIconBackground, activityIconColor, activityShortType } from "@/lib/activity-helpers";
 
 type ReportData = {
   group: Group;
@@ -17,61 +19,6 @@ type ReportData = {
   completedPayments: SettlementPayment[];
   activityRecords: ActivityRecord[];
 };
-
-function formatDate(value: number): string {
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
-
-function formatDateTime(value: number): string {
-  return new Date(value).toLocaleString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
-}
-
-function groupActivityByDate(activity: ActivityRecord[]): Record<string, ActivityRecord[]> {
-  return activity.reduce<Record<string, ActivityRecord[]>>((groups, record) => {
-    const label = new Date(record.createdAt).toLocaleDateString("en-US", {
-      weekday: "short", month: "short", day: "numeric", year: "numeric",
-    });
-    groups[label] = groups[label] ?? [];
-    groups[label].push(record);
-    return groups;
-  }, {});
-}
-
-function activityIcon(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.created") return "+";
-  if (eventType === "expense.deleted") return "-";
-  if (eventType === "wallet.linked" || eventType === "wallet.updated") return "W";
-  if (eventType === "settlement.completed") return "✓";
-  if (eventType === "invite.generated" || eventType === "member.joined_via_invite") return "🔗";
-  if (eventType.startsWith("batch.")) return "B";
-  if (eventType.startsWith("group.")) return "G";
-  if (eventType.startsWith("member.")) return "M";
-  if (eventType.startsWith("settlement.")) return "$";
-  return "i";
-}
-
-function activityIconBackground(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.deleted" || eventType === "settlement.failed" || eventType === "group.deleted") return "var(--red-light)";
-  if (eventType === "settlement.completed" || eventType === "wallet.linked" || eventType === "member.joined_via_invite") return "var(--green-light)";
-  if (eventType === "expense.created" || eventType === "wallet.updated" || eventType === "invite.generated" || eventType.startsWith("batch.")) return "var(--blue-light)";
-  return "var(--surface-2)";
-}
-
-function activityIconColor(eventType: ActivityRecord["eventType"]): string {
-  if (eventType === "expense.deleted" || eventType === "settlement.failed" || eventType === "group.deleted") return "var(--red)";
-  if (eventType === "settlement.completed" || eventType === "wallet.linked" || eventType === "member.joined_via_invite") return "var(--green)";
-  if (eventType === "expense.created" || eventType === "wallet.updated" || eventType === "invite.generated" || eventType.startsWith("batch.")) return "var(--blue)";
-  return "var(--text-2)";
-}
-
-function activityShortType(eventType: ActivityRecord["eventType"]): string {
-  return eventType.split(".").map((part) => part.charAt(0).toUpperCase() + part.slice(1).replace("_", " ")).join(" ");
-}
 
 export default function ReportPage() {
   const { groupId } = useParams() as { groupId: string };
@@ -172,15 +119,7 @@ export default function ReportPage() {
   const { group, expenses, completedPayments, activityRecords } = data;
 
   const balances = calculateBalances(group.members, expenses);
-  const paidSettlementAdjustments = new Map<string, number>();
-  for (const payment of completedPayments) {
-    paidSettlementAdjustments.set(payment.from, (paidSettlementAdjustments.get(payment.from) ?? 0) + payment.amount);
-    paidSettlementAdjustments.set(payment.to, (paidSettlementAdjustments.get(payment.to) ?? 0) - payment.amount);
-  }
-  const adjustedBalances = balances.map((b) => ({
-    member: b.member,
-    net: b.net + (paidSettlementAdjustments.get(b.member) ?? 0),
-  }));
+  const adjustedBalances = computeAdjustedBalances(balances, completedPayments);
   const settlements = calculateSettlements(adjustedBalances);
   const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
   const totalSettled = completedPayments.reduce((sum, p) => sum + p.amount, 0);

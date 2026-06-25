@@ -105,7 +105,9 @@ export default function CreateGroupPage() {
       }
       router.push(`/group/${groupId}?created=1`);
     } catch (e) {
-      setError("Failed to create group. Check your Firebase config.");
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[create-group] Error:", e);
+      setError("Failed to create group: " + msg);
       setLoading(false);
     }
   };

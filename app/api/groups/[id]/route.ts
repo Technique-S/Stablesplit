@@ -1,25 +1,8 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-function toMillis(value: unknown): number {
-  if (typeof value === "number") return value;
-  if (value && typeof value === "object" && "toMillis" in value) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  return Date.now();
-}
-
-const updateGroupSchema = z.object({
-  name: z.string().min(1).max(100).transform((s) => s.trim()).optional(),
-  description: z.string().max(500).transform((s) => s.trim()).optional(),
-  currency: z.string().length(3).optional(),
-  members: z.array(z.record(z.unknown())).optional(),
-  memberWallets: z.record(z.string()).optional(),
-  photoURL: z.string().optional(),
-  templateType: z.string().optional(),
-});
+import { updateGroupBaseSchema } from "@/lib/schemas";
+import { toMillis } from "@/lib/timestamp";
 
 async function getGroupOrThrow(groupId: string) {
   const snap = await adminDb.collection("groups").doc(groupId).get();
@@ -173,7 +156,7 @@ export async function PATCH(
       return okResponse({ success: true, members: updatedMembers, memberWallets });
     }
 
-    const parsed = updateGroupSchema.parse(body);
+    const parsed = updateGroupBaseSchema.parse(body);
 
     const updatePayload: Record<string, unknown> = {};
     if (parsed.name !== undefined) updatePayload.name = parsed.name;
@@ -252,9 +235,8 @@ export async function PATCH(
 
     return okResponse({ success: true });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "groups/[id].PATCH");
   }
 }

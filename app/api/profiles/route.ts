@@ -1,22 +1,8 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-
-const upsertProfileSchema = z.object({
-  displayName: z.string().max(100).optional(),
-  avatarURL: z.string().optional(),
-  walletAddress: z.string().optional(),
-});
-
-const patchProfileSchema = z.object({
-  displayName: z.string().max(100).optional(),
-  avatarURL: z.string().optional(),
-  walletAddress: z.string().optional(),
-  profileId: z.string().optional(),
-  joinedGroupIds: z.object({ $addToSet: z.string() }).optional(),
-  createdGroupIds: z.object({ $addToSet: z.string() }).optional(),
-});
+import { profileBaseSchema, patchProfileSchema } from "@/lib/schemas";
+import { toMillis } from "@/lib/timestamp";
 
 async function readOrMigrateProfile(walletAddress: string): Promise<{ profileId: string; isNew: boolean; existingData: Record<string, unknown> | null }> {
   const addr = walletAddress.toLowerCase();
@@ -48,7 +34,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);
     const body = await request.json();
-    const parsed = upsertProfileSchema.parse(body);
+    const parsed = profileBaseSchema.parse(body);
 
     const { profileId, isNew, existingData } = await readOrMigrateProfile(auth.walletAddress);
 
@@ -70,11 +56,6 @@ export async function POST(request: NextRequest) {
 
     const updatedSnap = await adminDb.collection("users").doc(profileId).get();
     const updated = updatedSnap.data()!;
-    const toMillis = (v: unknown) => {
-      if (typeof v === "number") return v;
-      if (v && typeof v === "object" && "toMillis" in v) return (v as { toMillis: () => number }).toMillis();
-      return Date.now();
-    };
 
     return okResponse({
       profile: {
@@ -89,9 +70,8 @@ export async function POST(request: NextRequest) {
       },
     }, 201);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "profiles.POST");
   }
 }
@@ -141,9 +121,8 @@ export async function PATCH(request: NextRequest) {
     await adminDb.collection("users").doc(profileId).update(updatePayload);
     return okResponse({ success: true });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(error.errors.map((e) => e.message).join("; "), 400);
-    }
+    const zodRes = handleZodError(error);
+    if (zodRes) return zodRes;
     return handleError(error, "profiles.PATCH");
   }
 }

@@ -1,22 +1,13 @@
 import {
   doc,
   getDoc,
-  setDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./firebase";
 import { UserProfile } from "./types";
 import { apiRequest } from "./api-client";
 import { setProfileId } from "./local-profile";
-
-export function toMillis(value: unknown): number {
-  if (typeof value === "number") return value;
-  if (value && typeof value === "object" && "toMillis" in value) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  return Date.now();
-}
+import { toMillis } from "./timestamp";
 
 function mapUserProfile(id: string, data: Record<string, unknown>): UserProfile {
   return {
@@ -112,10 +103,4 @@ export async function uploadProfileAvatar(profileId: string, file: Blob): Promis
   return avatarURL;
 }
 
-export async function updateProfileDisplayName(displayName: string, profileId: string): Promise<void> {
-  await apiRequest("PATCH", "/api/profiles", { displayName, profileId }, "");
-}
 
-export async function updateProfileWallet(walletAddress: string, profileId: string): Promise<void> {
-  await apiRequest("PATCH", "/api/profiles", { walletAddress: walletAddress || "", profileId }, "");
-}
