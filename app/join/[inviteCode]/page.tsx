@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { getGroupByInviteCode, joinGroupByInvite } from "@/lib/db";
+import { getGroupByInviteCode, joinGroupByInvite } from "@/lib/client/db";
 import { Group } from "@/lib/types";
-import { useWalletReady } from "@/components/WalletProvider";
+import { useWalletReady } from "@/components/wallet/WalletProvider";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { setProfileId } from "@/lib/local-profile";
-import { upsertProfile, addJoinedGroupId } from "@/lib/profile";
-import { shortenAddress } from "@/lib/members";
+import { setProfileId } from "@/lib/client/local-profile";
+import { upsertProfile, addJoinedGroupId } from "@/lib/client/profile";
+import { shortenAddress } from "@/lib/domain/members";
 
 export default function JoinPage() {
   const { inviteCode } = useParams() as { inviteCode: string };

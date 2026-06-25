@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getDoc, getDocs, doc, collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/client/firebase";
 import { Group, Expense, SettlementPayment, ActivityRecord, Balance } from "@/lib/types";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/db";
+import { mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/client/db";
 import { calculateBalances, calculateSettlements, CATEGORY_ICONS, CATEGORY_BACKGROUNDS, computeAdjustedBalances } from "@/lib/calculations";
-import { getAvatarColor, memberInitials } from "@/lib/members";
-import { formatDate, formatDateTime, groupActivityByDate } from "@/lib/date-utils";
-import { activityIcon, activityIconBackground, activityIconColor, activityShortType } from "@/lib/activity-helpers";
+import { getAvatarColor, memberInitials } from "@/lib/domain/members";
+import { formatDate, formatDateTime, groupActivityByDate } from "@/lib/domain/date-utils";
+import { activityIcon, activityIconBackground, activityIconColor, activityShortType } from "@/lib/domain/activity-helpers";
 
 type ReportData = {
   group: Group;

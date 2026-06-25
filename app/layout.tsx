@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import WalletProvider from "@/components/WalletProvider";
-import ProfileGuard from "@/components/ProfileGuard";
-import Navbar from "@/components/Navbar";
+import { ThemeProvider } from "@/components/layout/ThemeProvider";
+import WalletProvider from "@/components/wallet/WalletProvider";
+import ProfileGuard from "@/components/profile/ProfileGuard";
+import Navbar from "@/components/layout/Navbar";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 

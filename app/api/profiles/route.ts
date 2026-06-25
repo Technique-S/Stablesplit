@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import { profileBaseSchema, patchProfileSchema } from "@/lib/schemas";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { profileBaseSchema, patchProfileSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 
 async function readOrMigrateProfile(walletAddress: string): Promise<{ profileId: string; isNew: boolean; existingData: Record<string, unknown> | null }> {

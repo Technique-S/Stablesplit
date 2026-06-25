@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
-import { getProfileId } from "./local-profile";
-import { getProfile, getProfileByWalletAddress } from "./profile";
+import { getProfileId } from "./client/local-profile";
+import { getProfile, getProfileByWalletAddress } from "./client/profile";
 import { UserProfile } from "./types";
 
 type ProfileStatus = "loading" | "no-wallet" | "no-profile" | "has-profile";

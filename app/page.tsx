@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import OnboardingScreen from "@/components/OnboardingScreen";
+import OnboardingScreen from "@/components/shared/OnboardingScreen";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { getGroupsByIds, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/db";
-import { getProfileId } from "@/lib/local-profile";
+import { getGroupsByIds, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/client/db";
+import { getProfileId } from "@/lib/client/local-profile";
 import { Group, Balance, SettlementPayment, ActivityRecord } from "@/lib/types";
-import { memberInitials, memberNames, getAvatarColor } from "@/lib/members";
+import { memberInitials, memberNames, getAvatarColor } from "@/lib/domain/members";
 import { CardSkeleton, ActivitySkeleton } from "@/components/ui/Skeleton";
 
 interface GroupBalance {
@@ -216,7 +216,7 @@ export default function DashboardPage() {
   }, [loadData, profileReady, profileId]);
 
   const handleGenerateDemo = useCallback(async () => {
-    const { generateDemoGroup } = await import("@/lib/db");
+    const { generateDemoGroup } = await import("@/lib/client/db");
     setDemoLoading(true);
     setDemoError("");
     try {

@@ -4,16 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import Link from "next/link";
-import { createGroup, uploadGroupImage } from "@/lib/db";
-import GroupImageUpload from "@/components/GroupImageUpload";
-import { createMember, memberInitials, shortenAddress, validateEvmAddress, getAvatarColor } from "@/lib/members";
+import { createGroup, uploadGroupImage } from "@/lib/client/db";
+import GroupImageUpload from "@/components/group/GroupImageUpload";
+import { createMember, memberInitials, shortenAddress, validateEvmAddress, getAvatarColor } from "@/lib/domain/members";
 import { Member } from "@/lib/types";
-import { useWalletReady } from "@/components/WalletProvider";
+import { useWalletReady } from "@/components/wallet/WalletProvider";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import TemplatePicker from "@/components/TemplatePicker";
-import type { GroupTemplate } from "@/lib/templates";
-import { setProfileId } from "@/lib/local-profile";
-import { getProfile, upsertProfile, addCreatedGroupId } from "@/lib/profile";
+import TemplatePicker from "@/components/shared/TemplatePicker";
+import type { GroupTemplate } from "@/lib/domain/templates";
+import { setProfileId } from "@/lib/client/local-profile";
+import { getProfile, upsertProfile, addCreatedGroupId } from "@/lib/client/profile";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "NGN", "JPY", "CAD", "AUD", "INR"];
 

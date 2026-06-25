@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/api-utils";
+import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/server/api-utils";
 
 const FALLBACK_RATES: Record<string, Record<string, number>> = {
   USD: { EUR: 0.92, GBP: 0.79, NGN: 1550, JPY: 149.5, CAD: 1.36, AUD: 1.53, INR: 83.1 },

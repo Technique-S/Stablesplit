@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import { createExpenseSchema } from "@/lib/schemas";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { createExpenseSchema } from "@/lib/domain/schemas";
 
 export async function POST(request: NextRequest) {
   try {

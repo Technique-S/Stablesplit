@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount } from "wagmi";
-import { shortenAddress } from "@/lib/members";
+import { shortenAddress } from "@/lib/domain/members";
 
 interface Props {
   onUse: (wallet: string) => void;

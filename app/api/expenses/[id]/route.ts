@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import { updateExpenseSchema } from "@/lib/schemas";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { updateExpenseSchema } from "@/lib/domain/schemas";
 
 async function getExpenseRef(groupId: string, expenseId: string) {
   const nestedRef = adminDb.collection("groups").doc(groupId).collection("expenses").doc(expenseId);

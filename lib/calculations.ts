@@ -1,5 +1,5 @@
 import { Expense, Balance, Member, Settlement, SettlementPayment } from "./types";
-import { memberNames } from "./members";
+import { memberNames } from "./domain/members";
 
 const CENTS = 100;
 

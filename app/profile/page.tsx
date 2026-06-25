@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import ProfileAvatarUpload from "@/components/ProfileAvatarUpload";
-import { setProfileId } from "@/lib/local-profile";
-import { getProfileByWalletAddress, getProfile, upsertProfile, uploadProfileAvatar, addJoinedGroupId } from "@/lib/profile";
-import { getGroupsByIds } from "@/lib/db";
+import ProfileAvatarUpload from "@/components/profile/ProfileAvatarUpload";
+import { setProfileId } from "@/lib/client/local-profile";
+import { getProfileByWalletAddress, getProfile, upsertProfile, uploadProfileAvatar, addJoinedGroupId } from "@/lib/client/profile";
+import { getGroupsByIds } from "@/lib/client/db";
 import { Group, UserProfile } from "@/lib/types";
-import { validateEvmAddress, shortenAddress } from "@/lib/members";
-import { useWalletReady } from "@/components/WalletProvider";
+import { validateEvmAddress, shortenAddress } from "@/lib/domain/members";
+import { useWalletReady } from "@/components/wallet/WalletProvider";
 
 export default function ProfilePage() {
   const router = useRouter();

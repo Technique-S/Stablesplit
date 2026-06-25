@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, handleError } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
+import { verifyAuth, okResponse, handleError } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
 
 const DEMO_MEMBER_NAMES = ["Lou", "Ada", "John", "Sarah", "Mike"];
 const DEMO_WALLETS: Record<string, string> = {

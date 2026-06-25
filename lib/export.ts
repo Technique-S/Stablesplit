@@ -1,5 +1,5 @@
 import type { Expense, SettlementPayment, ActivityRecord, Group, Member, Balance, Settlement } from "./types";
-import { shortenAddress } from "@/lib/members";
+import { shortenAddress } from "@/lib/domain/members";
 
 function escapeCSV(val: string | number | undefined | null): string {
   if (val == null) return "";

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import { settlementSchema } from "@/lib/schemas";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { settlementSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 
 export async function POST(request: NextRequest) {

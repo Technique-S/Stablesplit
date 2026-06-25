@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import { groupBaseSchema } from "@/lib/schemas";
+import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
+import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { groupBaseSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 
 function generateInviteCode(): string {

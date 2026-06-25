@@ -3,11 +3,11 @@
 import { useCallback, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { shortenAddress } from "@/lib/members";
-import ProfileAvatarUpload from "@/components/ProfileAvatarUpload";
+import { shortenAddress } from "@/lib/domain/members";
+import ProfileAvatarUpload from "@/components/profile/ProfileAvatarUpload";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { setProfileId } from "@/lib/local-profile";
-import { upsertProfile, uploadProfileAvatar } from "@/lib/profile";
+import { setProfileId } from "@/lib/client/local-profile";
+import { upsertProfile, uploadProfileAvatar } from "@/lib/client/profile";
 
 export default function CreateProfilePage() {
   const router = useRouter();
