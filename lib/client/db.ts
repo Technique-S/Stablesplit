@@ -264,11 +264,11 @@ export async function uploadGroupImage(groupId: string, file: Blob): Promise<str
 
 export async function getGroupByInviteCode(inviteCode: string): Promise<Group | null> {
   try {
-    const snap = await getDocs(
-      query(collection(db, "groups"), where("inviteCode", "==", inviteCode))
+    const data = await apiRequest<Group>(
+      "GET",
+      `/api/groups/invite?code=${encodeURIComponent(inviteCode)}`
     );
-    if (snap.empty) return null;
-    return mapGroup(snap.docs[0]);
+    return data;
   } catch (error) {
     logFirestoreError("getGroupByInviteCode", { inviteCode }, error);
     return null;
@@ -316,22 +316,41 @@ export async function getGroup(id: string): Promise<Group | null> {
 }
 
 export async function getGroupsByIds(ids: string[]): Promise<Group[]> {
-  if (!ids.length) return [];
+  if (!ids.length) {
+    console.debug("[getGroupsByIds] no ids, returning []");
+    return [];
+  }
+  console.debug("[getGroupsByIds] START ids:", JSON.stringify(ids));
+  console.debug("[getGroupsByIds] query path: groups/{documentId}");
+  console.debug("[getGroupsByIds] SDK: firebase/firestore (browser client)");
+  console.debug("[getGroupsByIds] method: getDocs with query(collection(db, \"groups\"), where(\"__name__\", \"in\", batch))");
+
   try {
     const groups: Group[] = [];
     for (let i = 0; i < ids.length; i += 30) {
       const batch = ids.slice(i, i + 30);
+      console.debug("[getGroupsByIds] batch", i / 30, "ids:", JSON.stringify(batch));
       const snap = await getDocs(
         query(collection(db, "groups"), where("__name__", "in", batch))
       );
+      console.debug("[getGroupsByIds] batch", i / 30, "snap.size:", snap.size);
       for (const docSnap of snap.docs) {
         groups.push(mapGroup(docSnap));
       }
     }
-    return groups.sort((a, b) => b.createdAt - a.createdAt);
+    console.debug("[getGroupsByIds] total result count:", groups.length);
+    const sorted = groups.sort((a, b) => b.createdAt - a.createdAt);
+    console.debug("[getGroupsByIds] sorted group IDs:", JSON.stringify(sorted.map((g) => g.id)));
+    return sorted;
   } catch (error) {
+    console.error("[getGroupsByIds] FULL ERROR", error);
+    console.error("[getGroupsByIds] exception message:", error instanceof Error ? error.message : String(error));
+    console.error("[getGroupsByIds] exception stack:", error instanceof Error ? error.stack : "no stack trace");
+    if (error instanceof Error && "code" in error) {
+      console.error("[getGroupsByIds] Firebase error code:", (error as { code: string }).code);
+    }
     logFirestoreError("getGroupsByIds", { count: ids.length }, error);
-    return [];
+    throw error;
   }
 }
 

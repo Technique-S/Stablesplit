@@ -7,7 +7,7 @@ interface Props {
   message: string;
   confirmLabel?: string;
   loading?: boolean;
-  danger?: boolean;
+  isDanger?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -17,13 +17,13 @@ export default function ConfirmModal({
   message,
   confirmLabel = "Confirm",
   loading = false,
-  danger = false,
+  isDanger = false,
   onCancel,
   onConfirm,
 }: Props) {
   return (
     <Modal
-      open
+      isOpen
       onClose={onCancel}
       title={title}
       width={420}
@@ -39,7 +39,7 @@ export default function ConfirmModal({
             disabled={loading}
             className="btn-primary"
             style={{
-              background: danger ? "var(--red)" : "var(--blue)",
+              background: isDanger ? "var(--red)" : "var(--blue)",
               opacity: loading ? 0.7 : 1,
             }}
           >

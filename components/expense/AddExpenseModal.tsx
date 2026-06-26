@@ -53,7 +53,7 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
   const toggleSplit = (m: string) => {
     if (splitAmong.includes(m)) {
       if (splitAmong.length === 1) return;
-      setSplitAmong(splitAmong.filter((x) => x !== m));
+      setSplitAmong(splitAmong.filter((member) => member !== m));
     } else {
       setSplitAmong([...splitAmong, m]);
     }

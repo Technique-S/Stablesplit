@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, handleError } from "@/lib/server/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { safeRandomUUID } from "@/lib/server/crypto-utils";
 
 const DEMO_MEMBER_NAMES = ["Lou", "Ada", "John", "Sarah", "Mike"];
 const DEMO_WALLETS: Record<string, string> = {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const now = Date.now();
     const members = DEMO_MEMBER_NAMES.map((name) => ({
-      id: `member-${crypto.randomUUID()}`,
+      id: `member-${safeRandomUUID()}`,
       displayName: name,
       walletAddress: DEMO_WALLETS[name] || undefined,
       avatarColor: undefined,

@@ -29,7 +29,7 @@ export default function ProfileGuard({ children }: { children: React.ReactNode }
       return;
     }
 
-    if (!isAllowedRoute(pathname)) {
+    if (status !== "no-wallet" && !isAllowedRoute(pathname)) {
       router.replace("/create-profile");
     }
   }, [checking, status, isConnected, pathname, router]);

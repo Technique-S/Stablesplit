@@ -104,9 +104,9 @@ export default function CreateGroupPage() {
         }
       }
       router.push(`/group/${groupId}?created=1`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[create-group] Error:", e);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[create-group] Error:", error);
       setError("Failed to create group: " + msg);
       setLoading(false);
     }
@@ -126,7 +126,9 @@ export default function CreateGroupPage() {
           </div>
         ) : profileStatus !== "has-profile" ? (
           <div className="card animate-fade-in" style={{ padding: "3rem 2rem", textAlign: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", fontSize: "1.25rem" }}>👤</div>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", fontSize: "1.25rem" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="var(--blue)" strokeWidth="1.5"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7" stroke="var(--blue)" strokeWidth="1.5"/></svg>
+            </div>
             <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>Profile Required</h2>
             <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
               You need to create a profile before you can create a group.

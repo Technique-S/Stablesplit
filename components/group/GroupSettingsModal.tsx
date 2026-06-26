@@ -8,12 +8,12 @@ import {
   createMember,
   memberInitials,
   memberWalletMap,
-  shortenAddress,
   validateEvmAddress,
 } from "@/lib/domain/members";
 import { useWalletReady } from "../wallet/WalletProvider";
 import GroupImageUpload from "./GroupImageUpload";
 import ConfirmModal from "../shared/ConfirmModal";
+import WalletBadge from "../shared/WalletBadge";
 
 interface Props {
   group: Group;
@@ -120,7 +120,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
     onSaved(nextGroup);
     try {
       await updateGroup(group.id, nextGroup, address);
-    } catch (e) {
+    } catch {
       setError("Failed to save group changes.");
       onSaved(group);
       setLoading(false);
@@ -266,7 +266,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
           title="Remove unsettled member?"
           message={`${members.find((member) => member.id === pendingRemove)?.displayName ?? "This member"} still has an unsettled balance. Removing them will hide them from the group member list, but existing expenses can still reference them for settlement history.`}
           confirmLabel="Remove Member"
-          danger
+          isDanger
           onCancel={() => setPendingRemove(null)}
           onConfirm={() => {
             const member = members.find((existing) => existing.id === pendingRemove);
@@ -275,35 +275,6 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
         />
       )}
     </>
-  );
-}
-
-function WalletBadge({ wallet }: { wallet?: string }) {
-  const copyWallet = async () => {
-    if (!wallet) return;
-    await navigator.clipboard?.writeText(wallet);
-  };
-
-  if (!wallet) {
-    return (
-      <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-3)" }}>
-        No wallet
-      </span>
-    );
-  }
-
-  return (
-    <span className="badge mono" style={{ background: "var(--green-light)", color: "var(--green)", gap: "0.4rem" }}>
-      {shortenAddress(wallet)}
-      <button
-        type="button"
-        onClick={copyWallet}
-        title="Copy wallet address"
-        style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}
-      >
-        ⧉
-      </button>
-    </span>
   );
 }
 

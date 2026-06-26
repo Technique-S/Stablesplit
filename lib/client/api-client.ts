@@ -21,7 +21,17 @@ export async function apiRequest<T = unknown>(
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: res.statusText }));
+    console.error("[apiRequest] Response failed", {
+      path,
+      method,
+      status: res.status,
+      statusText: res.statusText,
+      walletAddress: headers["x-wallet-address"] ?? "NOT SET",
+    });
+    const text = await res.text().catch(() => "");
+    console.error("[apiRequest] Response body", { text });
+    let error: { message?: string } = { message: res.statusText };
+    try { error = JSON.parse(text); } catch { error = { message: text || res.statusText }; }
     throw new Error(error.message || `API ${method} ${path} failed (${res.status})`);
   }
 

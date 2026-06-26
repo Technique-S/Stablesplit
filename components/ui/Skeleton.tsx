@@ -13,12 +13,14 @@ function Skeleton({ width, height, borderRadius = 6 }: { width?: string; height?
   );
 }
 
+const skeletonWidths = ["40%", "55%", "70%", "45%", "60%", "80%"];
+
 export function CardSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="card" style={{ padding: "1.5rem" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {Array.from({ length: rows }).map((_, i) => (
-          <Skeleton key={i} width={`${40 + Math.random() * 40}%`} />
+          <Skeleton key={i} width={skeletonWidths[i % skeletonWidths.length]} />
         ))}
       </div>
     </div>

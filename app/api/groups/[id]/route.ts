@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { notifyGroupMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { updateGroupBaseSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 
-async function getGroupOrThrow(groupId: string) {
+async function getGroupOrThrow(groupId: string): Promise<Record<string, unknown>> {
   const snap = await adminDb.collection("groups").doc(groupId).get();
   if (!snap.exists) {
     throw Object.assign(new Error("Group not found"), { statusCode: 404 });
@@ -16,7 +18,7 @@ function memberKey(member: Record<string, unknown>): string {
   return String(member.id ?? String(member.displayName ?? "").toLowerCase());
 }
 
-async function addActivity(groupId: string, eventType: string, description: string, metadata: Record<string, unknown>, actorName = "StableSplit") {
+async function addActivity(groupId: string, eventType: string, description: string, metadata: Record<string, unknown>, actorName = "StableSplit"): Promise<void> {
   await adminDb.collection("groups").doc(groupId).collection("activity").add({
     groupId,
     eventType,
@@ -147,7 +149,7 @@ export async function PATCH(
       const previousWalletStr = previousWallet ? String(previousWallet).trim() : "";
       const memberName = String(updatedMembers.find((m) => String(m.id) === memberId)?.displayName ?? "A member");
       const eventType = previousWalletStr ? "wallet.updated" : "wallet.linked";
-      await addActivity(id, eventType as any,
+      await addActivity(id, eventType,
         previousWalletStr ? `${memberName} updated their wallet.` : `${memberName} linked a wallet.`,
         { memberId, memberName, previousWallet: previousWalletStr, walletAddress: trimmedWallet },
         memberName
@@ -201,6 +203,16 @@ export async function PATCH(
       await addActivity(id, "group.renamed", `Group renamed from ${prevName} to ${parsed.name}.`, {
         from: prevName, to: parsed.name,
       });
+
+      resolveProfileId(auth.walletAddress).then((actorProfileId) => {
+        notifyGroupMembers(id, actorProfileId, {
+          type: NOTIFICATION_TYPES.GROUP_UPDATED,
+          title: "Group Updated",
+          message: `Group renamed to "${newName}"`,
+          groupId: id,
+          groupName: newName,
+        });
+      }).catch(() => {});
     }
 
     const prevDesc = String(previous.description ?? "");
@@ -264,6 +276,16 @@ export async function DELETE(
       metadata: { groupName },
       createdAt: serverTimestamp(),
     });
+
+    resolveProfileId(auth.walletAddress).then((actorProfileId) => {
+      notifyGroupMembers(id, actorProfileId, {
+        type: NOTIFICATION_TYPES.GROUP_DELETED,
+        title: "Group Deleted",
+        message: `The group "${groupName}" was deleted`,
+        groupId: id,
+        groupName,
+      });
+    }).catch(() => {});
 
     const nestedExpenses = await adminDb.collection("groups").doc(id).collection("expenses").get();
     const settlementPayments = await adminDb.collection("groups").doc(id).collection("settlementPayments").get();

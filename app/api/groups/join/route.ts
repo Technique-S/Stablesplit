@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { notifyGroupMembers, notifySpecificMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { joinGroupSchema } from "@/lib/domain/schemas";
 
 export async function POST(request: NextRequest) {
@@ -127,6 +129,35 @@ export async function POST(request: NextRequest) {
         createdAt: serverTimestamp(),
       });
     }
+
+    const existingProfileIds = (Array.isArray(group.members) ? group.members : [])
+      .map((m: Record<string, unknown>) => m.profileId as string | undefined)
+      .filter(Boolean) as string[];
+    const newMemberProfileId = parsed.profileId || undefined;
+
+    Promise.all([
+      existingProfileIds.length > 0
+        ? notifyGroupMembers(groupId, newMemberProfileId ?? null, {
+            type: NOTIFICATION_TYPES.MEMBER_JOINED,
+            title: "New Member Joined",
+            message: `${resolvedDisplayName} joined the group`,
+            groupId,
+            groupName,
+            actorName: resolvedDisplayName,
+          })
+        : Promise.resolve(),
+
+      newMemberProfileId
+        ? notifySpecificMembers([newMemberProfileId], {
+            type: NOTIFICATION_TYPES.INVITE_ACCEPTED,
+            title: "Invite Accepted",
+            message: `${resolvedDisplayName} accepted an invitation`,
+            groupId,
+            groupName,
+            actorName: resolvedDisplayName,
+          })
+        : Promise.resolve(),
+    ]).catch(() => {});
 
     return okResponse({ groupId, groupName, alreadyMember: false });
   } catch (error) {

@@ -3,6 +3,7 @@ import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } fr
 import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
 import { profileBaseSchema, patchProfileSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
+import { safeRandomUUID } from "@/lib/server/crypto-utils";
 
 async function readOrMigrateProfile(walletAddress: string): Promise<{ profileId: string; isNew: boolean; existingData: Record<string, unknown> | null }> {
   const addr = walletAddress.toLowerCase();
@@ -25,9 +26,57 @@ async function readOrMigrateProfile(walletAddress: string): Promise<{ profileId:
     return { profileId, isNew: false, existingData: legacyData };
   }
 
-  const profileId = crypto.randomUUID();
+  const profileId = safeRandomUUID();
   await adminDb.collection("walletLinks").doc(addr).set({ profileId, createdAt: serverTimestamp() });
   return { profileId, isNew: true, existingData: null };
+}
+
+function profileResponse(id: string, data: Record<string, unknown>) {
+  return {
+    id,
+    displayName: (data.displayName as string) ?? "",
+    avatarURL: (data.avatarURL as string) ?? undefined,
+    walletAddress: (data.walletAddress as string) ?? undefined,
+    joinedGroupIds: Array.isArray(data.joinedGroupIds) ? data.joinedGroupIds as string[] : [],
+    createdGroupIds: Array.isArray(data.createdGroupIds) ? data.createdGroupIds as string[] : [],
+    createdAt: toMillis(data.createdAt),
+    updatedAt: toMillis(data.updatedAt ?? data.createdAt),
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    const { searchParams } = new URL(request.url);
+    const addr = auth.walletAddress.toLowerCase();
+
+    const profileIdParam = searchParams.get("id");
+    if (profileIdParam) {
+      const snap = await adminDb.collection("users").doc(profileIdParam).get();
+      if (!snap.exists) return okResponse({ profile: null });
+      return okResponse({ profile: profileResponse(profileIdParam, snap.data() as Record<string, unknown>) });
+    }
+
+    const linkSnap = await adminDb.collection("walletLinks").doc(addr).get();
+    if (linkSnap.exists) {
+      const profileId = linkSnap.data()!.profileId as string;
+      const profileSnap = await adminDb.collection("users").doc(profileId).get();
+      if (profileSnap.exists) {
+        return okResponse({ profile: profileResponse(profileId, profileSnap.data() as Record<string, unknown>) });
+      }
+    }
+
+    const legacySnap = await adminDb.collection("users").doc(addr).get();
+    if (legacySnap.exists) {
+      const legacyData = legacySnap.data() as Record<string, unknown>;
+      const profileId = (legacyData.profileId as string) || addr;
+      return okResponse({ profile: profileResponse(profileId, legacyData) });
+    }
+
+    return okResponse({ profile: null });
+  } catch (error) {
+    return handleError(error, "profiles.GET");
+  }
 }
 
 export async function POST(request: NextRequest) {

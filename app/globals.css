@@ -84,12 +84,12 @@
   --blue-light: rgba(0,82,255,0.15);
   --blue-mid: rgba(0,82,255,0.30);
   --blue-shadow: rgba(0,82,255,0.25);
-  --green: #059669;
-  --green-light: rgba(5,150,105,0.15);
-  --red: #DC2626;
-  --red-light: rgba(220,38,38,0.15);
-  --amber: #F59E0B;
-  --amber-light: rgba(245,158,11,0.15);
+  --green: #34D399;
+  --green-light: rgba(52,211,153,0.15);
+  --red: #F87171;
+  --red-light: rgba(248,113,113,0.15);
+  --amber: #FBBF24;
+  --amber-light: rgba(251,191,36,0.15);
   --error-border: rgba(220,38,38,0.30);
   --success-border: rgba(5,150,105,0.30);
   --overlay: rgba(0,0,0,0.76);
@@ -192,7 +192,7 @@ body {
 
 /* ── Buttons ── */
 .btn-primary {
-  background: linear-gradient(135deg, var(--blue), var(--blue-hover));
+  background: var(--blue);
   color: var(--on-brand);
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -207,12 +207,11 @@ body {
   gap: 0.5rem;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  box-shadow: 0 4px 14px var(--blue-shadow);
+  box-shadow: none;
 }
 
 .btn-primary:hover {
-  box-shadow: 0 6px 20px var(--blue-shadow);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 14px var(--blue-shadow);
 }
 
 .btn-primary:active {
@@ -371,7 +370,7 @@ body {
 }
 
 .input-field::placeholder {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .input-field:user-invalid {
@@ -552,6 +551,32 @@ body {
 /* ── Modal backdrop ── */
 .modal-backdrop {
   animation: backdropFade 0.2s ease forwards;
+}
+
+/* ── Interactive row hover ── */
+.hover-row {
+  transition: background 0.15s;
+}
+.hover-row:hover {
+  background: var(--surface-2);
+}
+
+/* ── Interactive surface card ── */
+.hover-surface {
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.hover-surface:hover {
+  background: var(--surface-3);
+}
+
+/* ── Activity item fade ── */
+.hover-fade {
+  transition: opacity 0.15s;
+  cursor: pointer;
+}
+.hover-fade:hover {
+  opacity: 0.8;
 }
 
 /* ── Theme-aware transitions for inline-styled elements ── */

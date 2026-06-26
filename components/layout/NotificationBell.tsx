@@ -7,15 +7,7 @@ import { getProfileId } from "@/lib/client/local-profile";
 import { getProfileByWalletAddress } from "@/lib/client/profile";
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from "@/lib/client/notifications";
 import type { AppNotification } from "@/lib/types";
-
-function formatTime(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60000) return "Just now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+import { formatTime } from "@/lib/client/format";
 
 export default function NotificationBell() {
   const router = useRouter();
@@ -33,7 +25,7 @@ export default function NotificationBell() {
     if (cached) {
       setProfileId(cached);
     } else if (address) {
-      getProfileByWalletAddress(address).then((p) => {
+      void getProfileByWalletAddress(address).then((p) => {
         if (p?.id) setProfileId(p.id);
       }).catch(() => {});
     }
@@ -42,24 +34,35 @@ export default function NotificationBell() {
   const fetchData = useCallback(async () => {
     if (!profileId) return;
     const [count, list] = await Promise.all([
-      getUnreadCount(profileId),
-      getNotifications(profileId, 30),
+      getUnreadCount(profileId, address),
+      getNotifications(profileId, 30, address),
     ]);
     setUnreadCount(count);
     setNotifications(list);
-  }, [profileId]);
+  }, [profileId, address]);
+
+  const POLL_INTERVAL = 15000;
 
   useEffect(() => {
     if (!profileId) return;
     void fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchData, POLL_INTERVAL);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchData();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [profileId, fetchData]);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    fetchData().finally(() => setLoading(false));
+    void fetchData().finally(() => setLoading(false));
   }, [open, fetchData]);
 
   useEffect(() => {
@@ -82,21 +85,21 @@ export default function NotificationBell() {
 
   const handleMarkRead = async (n: AppNotification) => {
     if (!profileId) return;
-    await markNotificationAsRead(profileId, n.id);
+    await markNotificationAsRead(profileId, n.id, address);
     setNotifications((prev) => prev.map((p) => (p.id === n.id ? { ...p, read: true } : p)));
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   const handleMarkAllRead = async () => {
     if (!profileId) return;
-    await markAllNotificationsAsRead(profileId);
+    await markAllNotificationsAsRead(profileId, address);
     setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
     setUnreadCount(0);
   };
 
   const handleNotificationClick = (n: AppNotification) => {
     if (!n.read && profileId) {
-      void markNotificationAsRead(profileId, n.id);
+      void markNotificationAsRead(profileId, n.id, address);
       setNotifications((prev) => prev.map((p) => (p.id === n.id ? { ...p, read: true } : p)));
       setUnreadCount((prev) => Math.max(0, prev - 1));
     }
@@ -200,7 +203,9 @@ export default function NotificationBell() {
               </div>
             ) : notifications.length === 0 ? (
               <div style={{ padding: "3rem 2rem", textAlign: "center" }}>
-                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem", opacity: 0.4 }}>🔔</div>
+                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem", opacity: 0.4, display: "flex", justifyContent: "center" }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                </div>
                 <p style={{ fontSize: "0.8125rem", color: "var(--text-2)" }}>No notifications yet</p>
               </div>
             ) : (

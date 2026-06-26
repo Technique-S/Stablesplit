@@ -1,7 +1,82 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { notifyGroupMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { createExpenseSchema } from "@/lib/domain/schemas";
+import { toMillis } from "@/lib/timestamp";
+import type { ExpenseCategory } from "@/lib/types";
+
+function mapExpenseResponse(doc: FirebaseFirestore.QueryDocumentSnapshot, groupId: string): Record<string, unknown> {
+  const data = doc.data();
+  const toMs = (v: unknown) => (v ? toMillis(v) : undefined);
+  return {
+    id: doc.id,
+    groupId: data.groupId ?? groupId,
+    description: data.description ?? "",
+    amount: Number(data.amount ?? 0),
+    paidBy: data.paidBy ?? "",
+    splitAmong: Array.isArray(data.splitAmong) ? data.splitAmong : [],
+    category: (data.category ?? "other") as ExpenseCategory,
+    createdAt: toMs(data.createdAt) ?? Date.now(),
+    date: toMs(data.date ?? data.createdAt) ?? Date.now(),
+    notes: data.notes ?? "",
+    lockedAt: data.lockedAt ? toMs(data.lockedAt) : undefined,
+    recurrence: data.recurrence
+      ? {
+          frequency: data.recurrence.frequency,
+          nextDate: toMs(data.recurrence.nextDate),
+          isPaused: data.recurrence.isPaused ?? false,
+        }
+      : undefined,
+    recurrenceParentId: data.recurrenceParentId ?? undefined,
+    originalCurrency: data.originalCurrency ?? undefined,
+    baseUsdAmount: data.baseUsdAmount ? Number(data.baseUsdAmount) : undefined,
+    baseEurAmount: data.baseEurAmount ? Number(data.baseEurAmount) : undefined,
+    fxRate: data.fxRate ? Number(data.fxRate) : undefined,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    const { searchParams } = new URL(request.url);
+    const groupId = searchParams.get("groupId");
+    if (!groupId) {
+      return errorResponse("groupId query parameter is required.", 400);
+    }
+
+    const groupSnap = await adminDb.collection("groups").doc(groupId).get();
+    if (!groupSnap.exists) {
+      return errorResponse("Group not found.", 404);
+    }
+    assertGroupMembership(groupSnap.data()!, auth.walletAddress);
+
+    const nestedSnap = await adminDb
+      .collection("groups").doc(groupId).collection("expenses")
+      .orderBy("createdAt", "desc").limit(200).get();
+
+    const nested = nestedSnap.docs.map((d) => mapExpenseResponse(d, groupId));
+    const nestedIds = new Set(nested.map((e) => e.id));
+
+    const legacySnap = await adminDb
+      .collection("expenses")
+      .where("groupId", "==", groupId)
+      .get();
+
+    const legacy = legacySnap.docs
+      .filter((d) => !nestedIds.has(d.id))
+      .map((d) => mapExpenseResponse(d, groupId));
+
+    const expenses = [...nested, ...legacy].sort(
+      (a, b) => (b.createdAt as number) - (a.createdAt as number)
+    );
+
+    return okResponse({ expenses });
+  } catch (error) {
+    return handleError(error, "expenses.GET");
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,6 +145,19 @@ export async function POST(request: NextRequest) {
       metadata: activityMeta,
       createdAt: serverTimestamp(),
     });
+
+    const groupName = String(groupData.name ?? "");
+    const groupCurrency = String(groupData.currency ?? "USD");
+    resolveProfileId(auth.walletAddress).then((creatorProfileId) => {
+      notifyGroupMembers(parsed.groupId, creatorProfileId, {
+        type: NOTIFICATION_TYPES.EXPENSE_CREATED,
+        title: "New Expense",
+        message: `${parsed.paidBy} added "${parsed.description}" for ${groupCurrency} ${parsed.amount}`,
+        groupId: parsed.groupId,
+        groupName,
+        actorName: parsed.paidBy,
+      });
+    }).catch(() => {});
 
     return okResponse({ expenseId }, 201);
   } catch (error) {

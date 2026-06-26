@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useRef } from "react";
 
 interface ModalProps {
-  open: boolean;
+  isOpen: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string;
@@ -14,7 +14,7 @@ interface ModalProps {
 }
 
 export default function Modal({
-  open,
+  isOpen,
   onClose,
   title,
   subtitle,
@@ -26,7 +26,7 @@ export default function Modal({
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const prev = document.activeElement as HTMLElement | null;
     modalRef.current?.focus();
 
@@ -41,9 +41,9 @@ export default function Modal({
       document.body.style.overflow = "";
       prev?.focus();
     };
-  }, [open, onClose]);
+  }, [isOpen, onClose]);
 
-  if (!open) return null;
+  if (!isOpen) return null;
 
   return (
     <>

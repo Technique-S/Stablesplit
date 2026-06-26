@@ -3,13 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getDoc, getDocs, doc, collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
-import { db } from "@/lib/client/firebase";
-import { Group, Expense, SettlementPayment, ActivityRecord, Balance } from "@/lib/types";
+import { useAccount } from "wagmi";
+import { Group, Expense, SettlementPayment, ActivityRecord } from "@/lib/types";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/client/db";
-import { calculateBalances, calculateSettlements, CATEGORY_ICONS, CATEGORY_BACKGROUNDS, computeAdjustedBalances } from "@/lib/calculations";
-import { getAvatarColor, memberInitials } from "@/lib/domain/members";
+import { calculateBalances, calculateSettlements, computeAdjustedBalances } from "@/lib/calculations";
+import { getAvatarColor } from "@/lib/domain/members";
 import { formatDate, formatDateTime, groupActivityByDate } from "@/lib/domain/date-utils";
 import { activityIcon, activityIconBackground, activityIconColor, activityShortType } from "@/lib/domain/activity-helpers";
 
@@ -22,6 +20,7 @@ type ReportData = {
 
 export default function ReportPage() {
   const { groupId } = useParams() as { groupId: string };
+  const { address } = useAccount();
   const { status: profileStatus, checking: profileChecking } = useProfileCheck();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,41 +28,32 @@ export default function ReportPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !address) return;
     setLoading(true);
     setError("");
 
     (async () => {
       try {
-        const groupSnap = await getDoc(doc(db, "groups", groupId));
-        if (!groupSnap.exists()) {
-          setError("Group not found.");
-          setLoading(false);
-          return;
+        const res = await fetch(`/api/report/${groupId}`, {
+          headers: { "x-wallet-address": address },
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || `Request failed (${res.status})`);
         }
-        const group = mapGroup(groupSnap as QueryDocumentSnapshot<DocumentData>);
-
-        const expSnap = await getDocs(collection(db, "groups", groupId, "expenses"));
-        const expenses = expSnap.docs.map((d) => mapExpense(d as QueryDocumentSnapshot<DocumentData>, groupId));
-
-        const paySnap = await getDocs(collection(db, "groups", groupId, "settlementPayments"));
-        const allPayments = paySnap.docs.map((d) => mapSettlementPayment(d as QueryDocumentSnapshot<DocumentData>));
-        const completedPayments = allPayments
+        const json = await res.json();
+        const completedPayments = (json.settlementPayments as SettlementPayment[])
           .filter((p) => p.status === "paid" || p.settlementStatus === "paid")
           .sort((a, b) => (b.settledAt ?? b.updatedAt ?? b.createdAt) - (a.settledAt ?? a.updatedAt ?? a.createdAt));
-
-        const actSnap = await getDocs(collection(db, "groups", groupId, "activity"));
-        const activityRecords = actSnap.docs
-          .map((d) => mapActivityRecord(d as QueryDocumentSnapshot<DocumentData>, groupId))
+        const activityRecords = (json.activityRecords as ActivityRecord[])
           .sort((a, b) => b.createdAt - a.createdAt);
-
-        setData({ group, expenses, completedPayments, activityRecords });
-      } catch {
-        setError("Failed to load report. The group may not exist.");
+        setData({ group: json.group, expenses: json.expenses, completedPayments, activityRecords });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load report.");
       }
       setLoading(false);
     })();
-  }, [groupId]);
+  }, [groupId, address]);
 
   const handleCopyLink = async () => {
     try {

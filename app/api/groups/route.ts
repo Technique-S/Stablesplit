@@ -1,19 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
 import { groupBaseSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
-
-function generateInviteCode(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let code = "";
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  for (let i = 0; i < 8; i++) {
-    code += chars[bytes[i] % chars.length];
-  }
-  return code;
-}
+import { safeRandomUUID, generateInviteCode } from "@/lib/server/crypto-utils";
 
 async function getProfileIdForWallet(walletAddress: string): Promise<string | null> {
   const addr = walletAddress.toLowerCase();
@@ -28,7 +18,7 @@ async function getProfileIdForWallet(walletAddress: string): Promise<string | nu
   return null;
 }
 
-async function readProfile(walletAddress: string) {
+async function readProfile(walletAddress: string): Promise<Record<string, unknown> | null> {
   const profileId = await getProfileIdForWallet(walletAddress);
   if (!profileId) return null;
   const snap = await adminDb.collection("users").doc(profileId).get();
@@ -36,17 +26,28 @@ async function readProfile(walletAddress: string) {
   return snap.data() as Record<string, unknown>;
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    console.log("[groups.POST] STEP 1 - verifyAuth");
     const auth = await verifyAuth(request);
-    const body = await request.json();
-    const parsed = groupBaseSchema.parse(body);
+    console.log("[groups.POST] STEP 1 complete - wallet:", auth.walletAddress);
 
+    console.log("[groups.POST] STEP 2 - request.json");
+    const body = await request.json();
+    console.log("[groups.POST] STEP 2 complete");
+
+    console.log("[groups.POST] STEP 3 - schema validation");
+    const parsed = groupBaseSchema.parse(body);
+    console.log("[groups.POST] STEP 3 complete - name:", parsed.name);
+
+    console.log("[groups.POST] STEP 4 - invite code generation");
     const callerWallet = parsed.createdBy ?? auth.walletAddress;
     const inviteCode = generateInviteCode();
+    console.log("[groups.POST] STEP 4 complete - inviteCode:", inviteCode);
 
+    console.log("[groups.POST] STEP 5 - build members payload");
     const members: Array<Record<string, unknown>> = parsed.members.map((m) => ({
-      id: m.id ?? `member-${crypto.randomUUID()}`,
+      id: m.id ?? `member-${safeRandomUUID()}`,
       displayName: String(m.displayName ?? "").trim(),
       walletAddress: m.walletAddress ? String(m.walletAddress).trim() : undefined,
       avatarColor: m.avatarColor ? String(m.avatarColor).trim() : undefined,
@@ -73,6 +74,9 @@ export async function POST(request: NextRequest) {
       .map((m) => String(m.walletAddress ?? "").toLowerCase())
       .filter(Boolean) as string[];
 
+    console.log("[groups.POST] STEP 5 complete - members:", members.length);
+
+    console.log("[groups.POST] STEP 6 - build Firestore payload");
     const payload: Record<string, unknown> = {
       name: parsed.name,
       description: parsed.description,
@@ -85,10 +89,14 @@ export async function POST(request: NextRequest) {
       createdBy: callerWallet,
     };
     if (parsed.templateType) payload.templateType = parsed.templateType;
+    console.log("[groups.POST] STEP 6 complete");
 
+    console.log("[groups.POST] STEP 7 - Firestore write (groups.add)");
     const ref = await adminDb.collection("groups").add(payload);
     const groupId = ref.id;
+    console.log("[groups.POST] STEP 7 complete - groupId:", groupId);
 
+    console.log("[groups.POST] STEP 8a - activity write (group.created)");
     await adminDb.collection("groups").doc(groupId).collection("activity").add({
       groupId,
       eventType: "group.created",
@@ -97,7 +105,9 @@ export async function POST(request: NextRequest) {
       metadata: { groupName: parsed.name, currency: parsed.currency, memberCount: members.length },
       createdAt: serverTimestamp(),
     });
+    console.log("[groups.POST] STEP 8a complete");
 
+    console.log("[groups.POST] STEP 8b - activity write (invite.generated)");
     await adminDb.collection("groups").doc(groupId).collection("activity").add({
       groupId,
       eventType: "invite.generated",
@@ -106,17 +116,28 @@ export async function POST(request: NextRequest) {
       metadata: { inviteCode },
       createdAt: serverTimestamp(),
     });
+    console.log("[groups.POST] STEP 8b complete");
 
+    console.log("[groups.POST] STEP 9 - return success response");
     return okResponse({ groupId }, 201);
   } catch (error) {
+    console.log("[groups.POST] STEP FAILED");
     const zodRes = handleZodError(error);
     if (zodRes) return zodRes;
     console.error("[groups.POST] Full error:", {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : undefined,
+      code: (error as any)?.code,
+      details: (error as any)?.details,
     });
-    return handleError(error, "groups.POST");
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }
 

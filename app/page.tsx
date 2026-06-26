@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import OnboardingScreen from "@/components/shared/OnboardingScreen";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { getGroupsByIds, getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/client/db";
+import { getGroups } from "@/lib/client/groups";
+import { getExpenses, getGroupActivity, getSettlementPayments } from "@/lib/client/db";
 import { getProfileId } from "@/lib/client/local-profile";
 import { Group, Balance, SettlementPayment, ActivityRecord } from "@/lib/types";
+import { formatTime } from "@/lib/client/format";
 import { memberInitials, memberNames, getAvatarColor } from "@/lib/domain/members";
 import { CardSkeleton, ActivitySkeleton } from "@/components/ui/Skeleton";
 
@@ -78,13 +80,17 @@ export default function DashboardPage() {
     setAggregateLoading(true);
 
     try {
-      const groupIds = [...new Set([...profile.createdGroupIds, ...profile.joinedGroupIds])];
-
-      // ── Never fetch all groups; only fetch groups the profile claims ──
-      const groups = groupIds.length > 0 ? await getGroupsByIds(groupIds) : [];
+      console.debug("[Dashboard] calling getGroups with address:", address);
+      const groups = address ? await getGroups(address) : [];
+      console.debug("[Dashboard] getGroups returned", groups.length, "groups");
+      if (groups.length > 0) {
+        console.debug("[Dashboard] group IDs returned:", JSON.stringify(groups.map((g) => g.id)));
+        console.debug("[Dashboard] group names:", JSON.stringify(groups.map((g) => g.name)));
+      }
       if (loadCancelledRef.current) return;
 
       // ── Defensive membership check: verify user is actually a member ──
+      console.debug("[Dashboard] walletLower:", walletLower);
       const verified = groups.filter((g) => {
         const byCreator = g.createdBy?.toLowerCase() === walletLower;
         const byMemberWallet = g.members.some(
@@ -95,21 +101,15 @@ export default function DashboardPage() {
         );
 
         if (byCreator || byMemberWallet || byMemberProfile) {
-          console.log("[Dashboard] Group included", {
-            groupId: g.id,
-            groupName: g.name,
-            reason: byCreator ? "creator" : byMemberWallet ? "member_wallet" : "member_profile",
-          });
           return true;
         }
 
-        console.warn("[Dashboard] Group excluded — user is not a member", {
-          groupId: g.id,
-          groupName: g.name,
-          profileId,
-        });
         return false;
       });
+      console.debug("[Dashboard] verified count:", verified.length, "out of", groups.length);
+      if (verified.length < groups.length) {
+        console.debug("[Dashboard] filtered out IDs:", JSON.stringify(groups.filter((g) => !verified.includes(g)).map((g) => g.id)));
+      }
 
       const createdSet = new Set(profile.createdGroupIds);
       const joinedSet = new Set(profile.joinedGroupIds);
@@ -118,11 +118,13 @@ export default function DashboardPage() {
         ...verified.filter((g) => createdSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
         ...verified.filter((g) => !createdSet.has(g.id) && joinedSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
       ];
+      console.debug("[Dashboard] ordered count:", ordered.length);
 
       setAllGroups(ordered);
       if (loadCancelledRef.current) return;
 
       if (ordered.length === 0) {
+        console.debug("[Dashboard] ordered is empty - returning early (no groups to process)");
         setLoading(false);
         return;
       }
@@ -201,8 +203,8 @@ export default function DashboardPage() {
       setRecentActivity(allActivity);
 
       setAggregateLoading(false);
-    } catch (e) {
-      console.error("[Dashboard] Failed to load data.", e);
+    } catch (error) {
+      console.error("[Dashboard] Failed to load data.", error);
       setError("Failed to load dashboard data.");
     } finally {
       setLoading(false);
@@ -222,8 +224,8 @@ export default function DashboardPage() {
     try {
         const groupId = await generateDemoGroup(address);
       router.push(`/group/${groupId}?demo=1`);
-    } catch (e) {
-      console.error("[Dashboard] Failed to generate demo group.", e);
+    } catch (error) {
+      console.error("[Dashboard] Failed to generate demo group.", error);
       setDemoError("Could not generate demo group. Check Firestore connectivity.");
     } finally {
       setDemoLoading(false);
@@ -255,26 +257,18 @@ export default function DashboardPage() {
     [groupBalances]
   );
 
-  const formatTime = (ts: number) => {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return "Just now";
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-
   const hasProfileData = allGroups.length > 0;
 
   if (!loading && !isConnected) {
     return (
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2.5rem 1.5rem 4rem" }}>
+      <main>
           <OnboardingScreen />
         </main>
     );
   }
 
   return (
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2.5rem 1.5rem 4rem" }}>
+      <main className="px-4 sm:px-6 lg:px-8 py-10">
         {/* Hero */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
@@ -407,9 +401,9 @@ export default function DashboardPage() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                         <div style={{ width: 44, height: 44, borderRadius: 12, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           {group.photoURL ? (
-                            <img src={group.photoURL} alt={group.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img src={group.photoURL} alt={group.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : (
-                            <div style={{ width: "100%", height: "100%", background: getAvatarColor(group.name), display: "flex", alignItems: "center", justifyContent: "center", color: "var(--avatar-text)", fontWeight: 700, fontSize: "1rem", letterSpacing: "-0.01em" }}>
+                            <div style={{ aspectRatio: 1, width: "100%", background: getAvatarColor(group.name), display: "flex", alignItems: "center", justifyContent: "center", color: "var(--avatar-text)", fontWeight: 700, fontSize: "1rem", letterSpacing: "-0.01em" }}>
                               {group.name.slice(0, 2).toUpperCase()}
                             </div>
                           )}
@@ -490,9 +484,7 @@ export default function DashboardPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                     {groupBalances.map((gb) => (
                       <Link key={gb.groupId} href={`/group/${gb.groupId}`} onClick={() => handleGroupClick(gb.groupId)} style={{ textDecoration: "none" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0.75rem", borderRadius: 8, transition: "background 0.15s" }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-2)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                        <div className="hover-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0.75rem", borderRadius: 8 }}
                         >
                           <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text)" }}>{gb.groupName}</span>
                           {Math.abs(gb.net) < 0.01 ? (
@@ -527,9 +519,7 @@ export default function DashboardPage() {
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   <Link href="/create" style={{ textDecoration: "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", borderRadius: 10, background: "var(--surface-2)", transition: "background 0.15s", cursor: "pointer" }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-3)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "var(--surface-2)"}
+                    <div className="hover-surface" style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", borderRadius: 10, background: "var(--surface-2)" }}
                     >
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--blue-light)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>+</div>
                       <div>
@@ -539,10 +529,8 @@ export default function DashboardPage() {
                     </div>
                   </Link>
                   {lastActiveGroupId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", borderRadius: 10, background: "var(--surface-2)", transition: "background 0.15s", cursor: "pointer" }}
+                    <div className="hover-surface" style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", borderRadius: 10, background: "var(--surface-2)" }}
                       onClick={handleOpenLastActive}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-3)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "var(--surface-2)"}
                     >
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>
                         →
@@ -593,9 +581,7 @@ export default function DashboardPage() {
                       .slice(0, 20)
                       .map((item) => (
                         <Link key={item.key} href={`/group/${item.groupId}`} onClick={() => handleGroupClick(item.groupId)} style={{ textDecoration: "none" }}>
-                          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", padding: "0.75rem 0", borderBottom: "1px solid var(--border)", transition: "opacity 0.15s" }}
-                            onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
-                            onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                          <div className="hover-fade" style={{ display: "flex", gap: "0.75rem", alignItems: "center", padding: "0.75rem 0", borderBottom: "1px solid var(--border)" }}
                           >
                             <div style={{ width: 32, height: 32, borderRadius: "50%", background: item.type === "settlement" ? "var(--green-light)" : "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", flexShrink: 0 }}>
                               {item.type === "settlement" ? "✓" : "●"}

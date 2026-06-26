@@ -7,7 +7,7 @@ import { useAccount } from "wagmi";
 import ProfileAvatarUpload from "@/components/profile/ProfileAvatarUpload";
 import { setProfileId } from "@/lib/client/local-profile";
 import { getProfileByWalletAddress, getProfile, upsertProfile, uploadProfileAvatar, addJoinedGroupId } from "@/lib/client/profile";
-import { getGroupsByIds } from "@/lib/client/db";
+import { getGroups } from "@/lib/client/groups";
 import { Group, UserProfile } from "@/lib/types";
 import { validateEvmAddress, shortenAddress } from "@/lib/domain/members";
 import { useWalletReady } from "@/components/wallet/WalletProvider";
@@ -52,6 +52,7 @@ export default function ProfilePage() {
   }, [address]);
 
   const loadGroups = useCallback(async (p: UserProfile) => {
+    if (!address) return;
     setGroupsLoading(true);
     try {
       const allIds = [...new Set([...p.createdGroupIds, ...p.joinedGroupIds])];
@@ -61,7 +62,7 @@ export default function ProfilePage() {
         setGroupsLoading(false);
         return;
       }
-      const groups = await getGroupsByIds(allIds);
+      const groups = await getGroups(address);
       setJoinedGroups(groups.filter((g) => p.joinedGroupIds.includes(g.id)));
       setCreatedGroups(groups.filter((g) => p.createdGroupIds.includes(g.id)));
     } catch {
@@ -69,7 +70,7 @@ export default function ProfilePage() {
     } finally {
       setGroupsLoading(false);
     }
-  }, []);
+  }, [address]);
 
   useEffect(() => {
     void loadProfile();
@@ -151,8 +152,7 @@ export default function ProfilePage() {
           </div>
       </main>
   );
-}
-
+  }
 
   const initials = profile
     ? profile.displayName.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()

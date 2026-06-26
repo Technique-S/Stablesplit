@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
 import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { notifySpecificMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { settlementSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 
@@ -98,6 +100,27 @@ export async function POST(request: NextRequest) {
       metadata: { settlementKey: parsed.settlementKey, from: parsed.from, to: parsed.to, amount: parsed.amount, token: parsed.currency, txHash: parsed.txHash ?? "" },
       createdAt: now,
     });
+
+    const settlementGroupName = String(groupData.name ?? "");
+    const membersList = (Array.isArray(groupData.members) ? groupData.members : []) as Array<Record<string, unknown>>;
+    const resolveSettlementMember = (displayName: string): string | null => {
+      const member = membersList.find((m) => String(m.displayName ?? "").toLowerCase() === displayName.toLowerCase());
+      if (member?.profileId) return member.profileId as string;
+      return null;
+    };
+    const payerPid = resolveSettlementMember(parsed.from);
+    const recipientPid = resolveSettlementMember(parsed.to);
+    const settlementProfileIds = [payerPid, recipientPid].filter(Boolean) as string[];
+    if (settlementProfileIds.length > 0) {
+      notifySpecificMembers(settlementProfileIds, {
+        type: NOTIFICATION_TYPES.SETTLEMENT_COMPLETED,
+        title: "Settlement Completed",
+        message: `${parsed.from} settled ${parsed.amount}`,
+        groupId: parsed.groupId,
+        groupName: settlementGroupName,
+        actorName: parsed.from,
+      }).catch(() => {});
+    }
 
     return okResponse({ success: true });
   } catch (error) {

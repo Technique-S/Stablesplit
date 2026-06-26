@@ -8,12 +8,18 @@ type AuthResult = {
 };
 
 export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
+  const start = Date.now();
   const walletAddress = request.headers.get("x-wallet-address");
+
   if (walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress.trim())) {
     const normalized = walletAddress.trim().toLowerCase();
+    console.log("[verifyAuth] wallet:", normalized, "result: authenticated");
+    console.log("[verifyAuth] duration:", Date.now() - start, "ms");
     return { uid: normalized, walletAddress: normalized };
   }
 
+  console.log("[verifyAuth] wallet:", walletAddress, "result: rejected");
+  console.log("[verifyAuth] duration:", Date.now() - start, "ms");
   throw Object.assign(
     new Error("Authentication required. Provide x-wallet-address header."),
     { statusCode: 401 }

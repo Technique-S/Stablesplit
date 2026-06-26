@@ -12,14 +12,44 @@ if (!raw) {
 
 const serviceAccount = JSON.parse(raw);
 
+console.log(
+  "[firebase-admin] project:",
+  serviceAccount.project_id
+);
+console.log(
+  "[firebase-admin] client:",
+  serviceAccount.client_email
+);
+
+const publicProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+console.log("[firebase-admin] serviceAccount.project_id:", serviceAccount.project_id);
+console.log("[firebase-admin] NEXT_PUBLIC_FIREBASE_PROJECT_ID:", publicProjectId);
+if (serviceAccount.project_id !== publicProjectId) {
+  console.log("[firebase-admin] PROJECT MISMATCH DETECTED");
+}
+
 const app = getApps().length === 0
   ? initializeApp({ credential: cert(serviceAccount) })
   : getApps()[0];
 
 export const adminDb = getFirestore(app);
-adminDb.settings({ ignoreUndefinedProperties: true });
+try {
+  adminDb.settings({ ignoreUndefinedProperties: true });
+} catch {
+  // settings already applied (module re-evaluation in dev mode)
+}
 
 export const serverTimestamp = FieldValue.serverTimestamp;
+export { FieldValue };
+
+(async () => {
+  try {
+    await adminDb.collection("_healthcheck").limit(1).get();
+    console.log("[firebase-admin] Firestore connection OK");
+  } catch (error) {
+    console.error("[firebase-admin] Firestore connection FAILED", error);
+  }
+})();
 
 export async function addActivity(
   groupId: string,

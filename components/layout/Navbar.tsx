@@ -39,18 +39,6 @@ export default function Navbar() {
     : null;
   const profileAvatar = profile?.avatarURL ?? null;
 
-  const linkStyle = (target: string): React.CSSProperties => ({
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    color: pathname === target ? "var(--blue)" : "var(--text-2)",
-    padding: "0.375rem 0.75rem",
-    borderRadius: 6,
-    background: pathname === target ? "var(--blue-light)" : "transparent",
-    transition: "all 0.15s ease",
-    textDecoration: "none",
-    whiteSpace: "nowrap",
-  });
-
   const navStyle: React.CSSProperties = {
     background: scrolled
       ? (isDark ? "rgba(15,15,15,0.60)" : "rgba(255,255,255,0.40)")
@@ -68,9 +56,9 @@ export default function Navbar() {
     <>
       <style>{`
         .nav-icon-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 8px;
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
           border: 1px solid var(--border);
           background: var(--surface-2);
           color: var(--text);
@@ -99,6 +87,23 @@ export default function Navbar() {
         }
         .nav-mobile-item:hover {
           background: var(--surface-2);
+        }
+        .nav-link {
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0.375rem 0.75rem;
+          border-radius: 6px;
+          transition: all 0.15s ease;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .nav-link-active {
+          color: var(--blue);
+          background: var(--blue-light);
+        }
+        .nav-link-inactive {
+          color: var(--text-2);
+          background: transparent;
         }
       `}</style>
       <nav style={navStyle}>
@@ -161,8 +166,11 @@ export default function Navbar() {
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-              <Link href="/" style={linkStyle("/")}>
+              <Link href="/" className={`nav-link ${pathname === "/" ? "nav-link-active" : "nav-link-inactive"}`}>
                 Groups
+              </Link>
+              <Link href="/bridge" className={`nav-link ${pathname === "/bridge" ? "nav-link-active" : "nav-link-inactive"}`}>
+                Bridge
               </Link>
               {hasProfile && (
                 <Link href="/create" style={{ textDecoration: "none" }}>
@@ -191,7 +199,7 @@ export default function Navbar() {
                     title="Profile"
                   >
                     {profileAvatar ? (
-                      <img src={profileAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                      <img src={profileAvatar} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
                     ) : (
                       <span style={{ fontSize: "0.6875rem", color: "var(--text-2)", fontWeight: 700 }}>
                         {profileInitials || "?"}
@@ -242,7 +250,8 @@ export default function Navbar() {
               href="/"
               className="nav-mobile-item"
               style={{
-                ...linkStyle("/"),
+                color: pathname === "/" ? "var(--blue)" : "var(--text-2)",
+                background: pathname === "/" ? "var(--blue-light)" : "transparent",
               }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -253,13 +262,28 @@ export default function Navbar() {
               </svg>
               Groups
             </Link>
+            <Link
+              href="/bridge"
+              className="nav-mobile-item"
+              style={{
+                color: pathname === "/bridge" ? "var(--blue)" : "var(--text-2)",
+                background: pathname === "/bridge" ? "var(--blue-light)" : "transparent",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8H14M8 2V14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.3" />
+              </svg>
+              Bridge
+            </Link>
             {hasProfile && (
               <>
                 <Link
                   href="/create"
                   className="nav-mobile-item"
                   style={{
-                    ...linkStyle("/create"),
+                    color: pathname === "/create" ? "var(--blue)" : "var(--text-2)",
+                    background: pathname === "/create" ? "var(--blue-light)" : "transparent",
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -271,7 +295,8 @@ export default function Navbar() {
                   href="/profile"
                   className="nav-mobile-item"
                   style={{
-                    ...linkStyle("/profile"),
+                    color: pathname === "/profile" ? "var(--blue)" : "var(--text-2)",
+                    background: pathname === "/profile" ? "var(--blue-light)" : "transparent",
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

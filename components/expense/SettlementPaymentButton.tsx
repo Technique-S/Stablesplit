@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { parseUnits, formatUnits } from "viem";
+import Link from "next/link";
 import { ARC_TESTNET_EXPLORER_URL, ARC_TESTNET_ID, addArcTestnetToInjectedWallet, arcTestnet } from "@/lib/web3/wallet";
-import { createSettlementKey, transferArcToken, validateEvmAddress } from "@/lib/web3/arc-payments";
+import { ARC_TOKEN_CONTRACTS, ARC_TOKEN_DECIMALS, createSettlementKey, transferArcToken, validateEvmAddress } from "@/lib/web3/arc-payments";
 import { upsertSettlementPayment } from "@/lib/client/db";
 import { Group, Settlement, SettlementPayment, SettlementToken } from "@/lib/types";
 import { getMemberWallet } from "@/lib/domain/members";
@@ -40,6 +42,7 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
   const { data: walletClient } = useWalletClient();
   const { switchChainAsync } = useSwitchChain();
   const [paying, setPaying] = useState(false);
+  const [insufficient, setInsufficient] = useState<{ balance: string; needed: string } | null>(null);
 
   const settlementKey = useMemo(() => createSettlementKey(settlement, token), [settlement, token]);
   const payerWallet = getMemberWallet(group.members, settlement.from) || group.memberWallets?.[settlement.from]?.trim() || "";
@@ -68,6 +71,35 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
     }
     if (payerWallet.toLowerCase() === receiverWallet.toLowerCase()) {
       onStatus("Sender and receiver wallets cannot be the same.", "error");
+      return;
+    }
+
+    setInsufficient(null);
+
+    const tokenAddress = ARC_TOKEN_CONTRACTS[token];
+    const decimals = ARC_TOKEN_DECIMALS[token];
+    const amountUnits = parseUnits(settlement.amount.toFixed(decimals), decimals);
+    const balance = await publicClient.readContract({
+      address: tokenAddress,
+      abi: [
+        {
+          type: "function",
+          name: "balanceOf",
+          stateMutability: "view",
+          inputs: [{ name: "account", type: "address" }],
+          outputs: [{ name: "balance", type: "uint256" }],
+        },
+      ] as const,
+      functionName: "balanceOf",
+      args: [address as `0x${string}`],
+    });
+    if (balance < amountUnits) {
+      const displayed = formatUnits(balance, decimals);
+      setInsufficient({
+        balance: `${displayed} ${token}`,
+        needed: `${settlement.amount.toFixed(2)} ${token}`,
+      });
+      onStatus(`Insufficient ${token} balance. ${displayed} available, ${settlement.amount.toFixed(2)} needed.`, "error");
       return;
     }
 
@@ -150,6 +182,30 @@ function SettlementPaymentInner({ group, groupId, settlement, payment, token, on
       >
         Paid {payment?.settlementTokenUsed ?? payment?.currency ?? token} {settlement.amount.toFixed(2)} ↗
       </a>
+    );
+  }
+
+  if (insufficient) {
+    const bridgeAmount = settlement.amount.toFixed(2);
+    const returnUrl = `/group/${groupId}`;
+    return (
+      <div style={{ display: "flex", gap: "0.375rem", alignItems: "center" }}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => { setInsufficient(null); handlePayment(); }}
+          style={{ padding: "0.5rem 0.75rem", fontSize: "0.8125rem", opacity: 0.7 }}
+        >
+          Retry
+        </button>
+        <Link
+          href={`/bridge?amount=${bridgeAmount}&returnTo=${encodeURIComponent(returnUrl)}`}
+          className="btn-secondary"
+          style={{ padding: "0.5rem 0.75rem", fontSize: "0.8125rem", textDecoration: "none" }}
+        >
+          Bridge Funds
+        </Link>
+      </div>
     );
   }
 

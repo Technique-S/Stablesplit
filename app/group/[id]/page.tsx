@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AccordionSection from "@/components/shared/AccordionSection";
@@ -13,11 +13,12 @@ import SettlementPaymentButton from "@/components/expense/SettlementPaymentButto
 import { useAccount } from "wagmi";
 import SettleAllModal from "@/components/expense/SettleAllModal";
 import ExportModal from "@/components/expense/ExportModal";
+import WalletBadge from "@/components/shared/WalletBadge";
 import { useProfileCheck } from "@/lib/use-profile-check";
-import { deleteExpense, deleteGroup, mapGroup, mapExpense, mapSettlementPayment, mapActivityRecord } from "@/lib/client/db";
+import { deleteExpense, deleteGroup } from "@/lib/client/db";
+import { getGroup } from "@/lib/client/groups";
+import { apiRequest } from "@/lib/client/api-client";
 import { CardSkeleton } from "@/components/ui/Skeleton";
-import { onSnapshot, doc, collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
-import { db } from "@/lib/client/firebase";
 import { ActivityRecord, Group, Expense, Member, SettlementPayment, SettlementToken, RecurrenceFrequency } from "@/lib/types";
 import { generateNextOccurrence, pauseRecurrence, resumeRecurrence, deleteRecurrence, FREQUENCY_LABELS } from "@/lib/domain/recurrence";
 import { calculateBalances, calculateSettlements, calculateNaiveSettlementCount, CATEGORY_BACKGROUNDS, CATEGORY_ICONS, normalizeExpenses, computeAdjustedBalances } from "@/lib/calculations";
@@ -66,6 +67,7 @@ export default function GroupPage() {
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "custom">("all");
   const [customDateStart, setCustomDateStart] = useState("");
   const [customDateEnd, setCustomDateEnd] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const { status: profileStatus, checking: profileChecking } = useProfileCheck();
   const { address: connectedAddress, isConnected: isWalletConnected } = useAccount();
@@ -79,12 +81,12 @@ export default function GroupPage() {
   const filteredExpenses = useMemo(() => {
     return expenses.filter((exp) => {
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+        const searchQueryLower = searchQuery.toLowerCase();
         if (
-          !exp.description.toLowerCase().includes(q) &&
-          !exp.paidBy.toLowerCase().includes(q) &&
-          !exp.amount.toString().includes(q) &&
-          !exp.category.toLowerCase().includes(q)
+          !exp.description.toLowerCase().includes(searchQueryLower) &&
+          !exp.paidBy.toLowerCase().includes(searchQueryLower) &&
+          !exp.amount.toString().includes(searchQueryLower) &&
+          !exp.category.toLowerCase().includes(searchQueryLower)
         )
           return false;
       }
@@ -93,22 +95,22 @@ export default function GroupPage() {
       if (statusFilter === "settled" && !exp.lockedAt) return false;
       if (statusFilter === "unsettled" && exp.lockedAt) return false;
       if (dateFilter !== "all") {
-        const day = 86400000;
+        const MS_PER_DAY = 86400000;
         const now = Date.now();
         if (dateFilter === "today") {
-          const sod = startOfDay(now);
-          if (exp.date < sod || exp.date >= sod + day) return false;
+          const startOfDayDate = startOfDay(now);
+          if (exp.date < startOfDayDate || exp.date >= startOfDayDate + MS_PER_DAY) return false;
         } else if (dateFilter === "week") {
-          const sow = startOfWeek(now);
-          if (exp.date < sow || exp.date >= sow + 7 * day) return false;
+          const startOfWeekDate = startOfWeek(now);
+          if (exp.date < startOfWeekDate || exp.date >= startOfWeekDate + 7 * MS_PER_DAY) return false;
         } else if (dateFilter === "month") {
-          const som = startOfMonth(now);
-          const sonm = startOfNextMonth(now);
-          if (exp.date < som || exp.date >= sonm) return false;
+          const startOfMonthDate = startOfMonth(now);
+          const startOfNextMonthDate = startOfNextMonth(now);
+          if (exp.date < startOfMonthDate || exp.date >= startOfNextMonthDate) return false;
         } else if (dateFilter === "custom" && customDateStart && customDateEnd) {
-          const cs = new Date(customDateStart).getTime();
-          const ce = new Date(customDateEnd).getTime() + day;
-          if (exp.date < cs || exp.date > ce) return false;
+          const customStart = new Date(customDateStart).getTime();
+          const customEnd = new Date(customDateEnd).getTime() + MS_PER_DAY;
+          if (exp.date < customStart || exp.date > customEnd) return false;
         }
       }
       return true;
@@ -130,42 +132,22 @@ export default function GroupPage() {
     setLoading(true);
     setError("");
 
-    const unsubGroup = onSnapshot(
-      doc(db, "groups", id),
-      (snap) => {
-        if (snap.exists()) {
-          setGroup(mapGroup(snap));
-        } else {
-          setGroup(null);
-        }
+    Promise.all([
+      getGroup(id),
+      apiRequest<{ expenses: Expense[] }>("GET", `/api/expenses?groupId=${encodeURIComponent(id)}`, undefined, connectedAddress),
+      apiRequest<{ payments: SettlementPayment[] }>("GET", `/api/settlements?groupId=${encodeURIComponent(id)}`, undefined, connectedAddress),
+    ])
+      .then(([group, expensesRes, paymentsRes]) => {
+        setGroup(group);
+        setExpenses(expensesRes.expenses);
+        setSettlementPayments(paymentsRes.payments);
         setLoading(false);
-      },
-      () => {
+      })
+      .catch(() => {
         setError("Group could not be loaded.");
         setLoading(false);
-      }
-    );
-
-    const unsubExpenses = onSnapshot(
-      collection(db, "groups", id, "expenses"),
-      (snap) => {
-        setExpenses(snap.docs.map((d) => mapExpense(d as QueryDocumentSnapshot<DocumentData>, id)));
-      }
-    );
-
-    const unsubPayments = onSnapshot(
-      collection(db, "groups", id, "settlementPayments"),
-      (snap) => {
-        setSettlementPayments(snap.docs.map((d) => mapSettlementPayment(d as QueryDocumentSnapshot<DocumentData>)));
-      }
-    );
-
-    return () => {
-      unsubGroup();
-      unsubExpenses();
-      unsubPayments();
-    };
-  }, [id]);
+      });
+  }, [id, refreshKey]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -173,7 +155,7 @@ export default function GroupPage() {
     return () => window.clearTimeout(timeout);
   }, [successMessage]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const idx = tabs.indexOf(tab);
     const el = tabRefs.current[idx];
     if (el) {
@@ -200,28 +182,23 @@ export default function GroupPage() {
     const due = expenses.filter(
       (exp) => exp.recurrence && !exp.recurrence.isPaused && exp.recurrence.nextDate <= Date.now()
     );
-    for (const exp of due) {
-      generateNextOccurrence(id, exp.id).catch(() => {});
-    }
+    if (due.length === 0) return;
+    Promise.all(due.map((exp) => generateNextOccurrence(id, exp.id).catch(() => {})))
+      .then(() => setRefreshKey(v => v + 1))
+      .catch(() => {});
   }, [id, expenses]);
 
   useEffect(() => {
     if (!id || !showActivity) return;
     setActivityLoading(true);
 
-    const unsubActivity = onSnapshot(
-      collection(db, "groups", id, "activity"),
-      (snap) => {
-        const records = snap.docs.map((d) => mapActivityRecord(d as QueryDocumentSnapshot<DocumentData>, id));
-        records.sort((a, b) => b.createdAt - a.createdAt);
-        setActivityRecords(records);
+    apiRequest<{ activity: ActivityRecord[] }>("GET", `/api/activity?groupId=${encodeURIComponent(id)}`, undefined, connectedAddress)
+      .then((data) => {
+        setActivityRecords(data.activity);
         setActivityLoading(false);
-      },
-      () => setActivityLoading(false)
-    );
-
-    return () => unsubActivity();
-  }, [id, showActivity]);
+      })
+      .catch(() => setActivityLoading(false));
+  }, [id, showActivity, refreshKey]);
 
   const openActivity = () => {
     setShowActivity(true);
@@ -241,6 +218,7 @@ export default function GroupPage() {
         await deleteExpense(id, deletingExpense.id, connectedAddress);
       setSuccessMessage("Expense deleted successfully.");
       setDeletingExpense(null);
+      setRefreshKey(v => v + 1);
     } catch (e) {
       setExpenses(previousExpenses);
       setError("Failed to delete expense.");
@@ -253,6 +231,7 @@ export default function GroupPage() {
     setActionLoading(true);
     try {
         await deleteGroup(id, connectedAddress);
+      setRefreshKey(v => v + 1);
       router.push("/");
     } catch (e) {
       setError("Failed to delete group.");
@@ -1171,7 +1150,7 @@ export default function GroupPage() {
                           {s.from.slice(0, 1).toUpperCase()}
                         </div>
                         <span style={{ fontWeight: 600 }}>{s.from}</span>
-                        <WalletBadge wallet={getMemberWallet(group.members, s.from)} />
+                        <WalletBadge wallet={getMemberWallet(group.members, s.from)} noWalletBackground="var(--red-light)" noWalletColor="var(--red)" noWalletLabel="No wallet" />
                         {!getMemberWallet(group.members, s.from) && (
                           <button
                             type="button"
@@ -1215,7 +1194,7 @@ export default function GroupPage() {
                           {s.to.slice(0, 1).toUpperCase()}
                         </div>
                         <span style={{ fontWeight: 600 }}>{s.to}</span>
-                        <WalletBadge wallet={getMemberWallet(group.members, s.to)} />
+                        <WalletBadge wallet={getMemberWallet(group.members, s.to)} noWalletBackground="var(--red-light)" noWalletColor="var(--red)" noWalletLabel="No wallet" />
                         {!getMemberWallet(group.members, s.to) && (
                           <button
                             type="button"
@@ -1275,7 +1254,7 @@ export default function GroupPage() {
                             setError("");
                           }
                         }}
-                        onPaid={() => {}}
+                        onPaid={() => setRefreshKey(v => v + 1)}
                       />
                     </div>
                   </div>
@@ -1317,6 +1296,7 @@ export default function GroupPage() {
           onAdded={() => {
             setShowModal(false);
             setSuccessMessage("Expense added successfully.");
+            setRefreshKey(v => v + 1);
           }}
         />
       )}
@@ -1342,6 +1322,7 @@ export default function GroupPage() {
           onSaved={(updatedGroup) => {
             setGroup(updatedGroup);
             setSuccessMessage("Group updated successfully.");
+            setRefreshKey(v => v + 1);
           }}
         />
       )}
@@ -1355,6 +1336,7 @@ export default function GroupPage() {
             const updatedMember = updatedGroup.members.find((member) => member.id === editingWalletMember.id);
             if (updatedMember) setEditingWalletMember(updatedMember);
             setSuccessMessage("Wallet saved successfully.");
+            setRefreshKey(v => v + 1);
           }}
         />
       )}
@@ -1363,7 +1345,7 @@ export default function GroupPage() {
           title="Delete this group?"
           message="This permanently deletes the group and all related expenses. This cannot be undone."
           confirmLabel="Delete Group"
-          danger
+          isDanger
           loading={actionLoading}
           onCancel={() => setShowDeleteGroup(false)}
           onConfirm={handleDeleteGroup}
@@ -1374,7 +1356,7 @@ export default function GroupPage() {
           title="Delete this expense?"
           message={`Delete "${deletingExpense.description}"? Balances will update immediately after deletion.`}
           confirmLabel="Delete Expense"
-          danger
+          isDanger
           loading={actionLoading}
           onCancel={() => setDeletingExpense(null)}
           onConfirm={handleDeleteExpense}
@@ -1387,7 +1369,10 @@ export default function GroupPage() {
           items={settleableItems}
           token={paymentToken}
           onClose={() => setSettleAllOpen(false)}
-          onComplete={() => setSettleAllOpen(false)}
+          onComplete={() => {
+            setSettleAllOpen(false);
+            setRefreshKey(v => v + 1);
+          }}
           onStatus={(message, kind) => {
             if (kind === "error") { setError(message); setSuccessMessage(""); }
             else { setSuccessMessage(message); setError(""); }
@@ -1420,11 +1405,11 @@ export default function GroupPage() {
             {
               id: "invite",
               label: "Invite Members",
-              icon: "\u{1F517}",
+              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
               onClick: () => {
                 const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
                 const inviteUrl = `${baseUrl}/join/${group.inviteCode}`;
-                navigator.clipboard.writeText(inviteUrl).then(() => {
+                void navigator.clipboard.writeText(inviteUrl).then(() => {
                   setInviteCopied(true);
                   setSuccessMessage("Invite link copied to clipboard!");
                   setTimeout(() => setInviteCopied(false), 2000);
@@ -1435,19 +1420,19 @@ export default function GroupPage() {
             {
               id: "export",
               label: "Export Data",
-              icon: "\u{1F4E5}",
+              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
               onClick: () => setShowExportModal(true),
             },
             {
               id: "edit",
               label: "Edit Group",
-              icon: "\u{270E}",
+              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
               onClick: () => setShowGroupSettings(true),
             },
             {
               id: "delete",
               label: "Delete Group",
-              icon: "\u{1F5D1}",
+              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>,
               onClick: () => setShowDeleteGroup(true),
               color: "var(--red)",
             },
@@ -1455,35 +1440,6 @@ export default function GroupPage() {
         />
       )}
     </>
-  );
-}
-
-function WalletBadge({ wallet }: { wallet: string }) {
-  const copyWallet = async () => {
-    if (!wallet) return;
-    await navigator.clipboard?.writeText(wallet);
-  };
-
-  if (!wallet) {
-    return (
-      <span className="badge" style={{ background: "var(--red-light)", color: "var(--red)" }}>
-        No wallet
-      </span>
-    );
-  }
-
-  return (
-    <span className="badge mono" title={wallet} style={{ background: "var(--green-light)", color: "var(--green)", gap: "0.35rem" }}>
-      {shortenAddress(wallet)}
-      <button
-        type="button"
-        onClick={copyWallet}
-        title="Copy wallet address"
-        style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}
-      >
-        ⧉
-      </button>
-    </span>
   );
 }
 

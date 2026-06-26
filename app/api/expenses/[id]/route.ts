@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError, assertGroupMembership } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { notifyGroupMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { updateExpenseSchema } from "@/lib/domain/schemas";
 
 async function getExpenseRef(groupId: string, expenseId: string) {
@@ -57,6 +59,23 @@ export async function PATCH(
     }
 
     await ref.update(updatePayload);
+
+    const updatedDescription = String(parsed.description ?? data.description ?? "");
+    const updatedPaidBy = String(parsed.paidBy ?? data.paidBy ?? "Someone");
+    const groupSnap2 = await adminDb.collection("groups").doc(parsed.groupId).get();
+    const groupData2 = groupSnap2.data()!;
+    const groupName2 = String(groupData2.name ?? "");
+    resolveProfileId(auth.walletAddress).then((editorProfileId) => {
+      notifyGroupMembers(parsed.groupId!, editorProfileId, {
+        type: NOTIFICATION_TYPES.EXPENSE_UPDATED,
+        title: "Expense Updated",
+        message: `${updatedPaidBy} updated "${updatedDescription}"`,
+        groupId: parsed.groupId,
+        groupName: groupName2,
+        actorName: updatedPaidBy,
+      });
+    }).catch(() => {});
+
     return okResponse({ success: true });
   } catch (error) {
     const zodRes = handleZodError(error);
@@ -106,6 +125,19 @@ export async function DELETE(
       metadata: { expenseId, description: expenseDescription, amount: Number(data.amount ?? 0), paidBy: String(data.paidBy ?? "") },
       createdAt: serverTimestamp(),
     });
+
+    const deletedPaidBy = String(data.paidBy ?? "Someone");
+    const groupNameDelete = String(groupData.name ?? "");
+    resolveProfileId(auth.walletAddress).then((deleterProfileId) => {
+      notifyGroupMembers(groupId, deleterProfileId, {
+        type: NOTIFICATION_TYPES.EXPENSE_DELETED,
+        title: "Expense Removed",
+        message: `${deletedPaidBy} removed an expense`,
+        groupId,
+        groupName: groupNameDelete,
+        actorName: deletedPaidBy,
+      });
+    }).catch(() => {});
 
     return okResponse({ success: true });
   } catch (error) {

@@ -1,67 +1,41 @@
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "./firebase";
+import { storage } from "./firebase";
 import { UserProfile } from "../types";
 import { apiRequest } from "./api-client";
 import { setProfileId } from "./local-profile";
-import { toMillis } from "../timestamp";
-
-function mapUserProfile(id: string, data: Record<string, unknown>): UserProfile {
-  return {
-    id,
-    displayName: (data.displayName as string) ?? "",
-    avatarURL: (data.avatarURL as string) ?? undefined,
-    walletAddress: (data.walletAddress as string) ?? undefined,
-    joinedGroupIds: Array.isArray(data.joinedGroupIds) ? data.joinedGroupIds as string[] : [],
-    createdGroupIds: Array.isArray(data.createdGroupIds) ? data.createdGroupIds as string[] : [],
-    createdAt: toMillis(data.createdAt),
-    updatedAt: toMillis(data.updatedAt ?? data.createdAt),
-  };
-}
-
-function legacyWalletId(address: string): string {
-  return address.trim().toLowerCase();
-}
 
 export async function getProfileByWalletAddress(walletAddress: string): Promise<UserProfile | null> {
-  if (!walletAddress) return null;
+  if (!walletAddress) {
+    console.warn("[ProfileGuard] getProfileByWalletAddress called with empty address");
+    return null;
+  }
   const addr = walletAddress.trim().toLowerCase();
+  console.info("[ProfileGuard] walletLinks lookup for", addr);
 
   try {
-    const linkSnap = await getDoc(doc(db, "walletLinks", addr));
-    if (linkSnap.exists()) {
-      const profileId = linkSnap.data()!.profileId as string;
-      const profileSnap = await getDoc(doc(db, "users", profileId));
-      if (profileSnap.exists()) {
-        setProfileId(profileId);
-        return mapUserProfile(profileId, profileSnap.data() as Record<string, unknown>);
-      }
+    const result = await apiRequest<{ profile: UserProfile | null }>("GET", `/api/profiles`, undefined, addr);
+    console.info("[ProfileGuard] API profile result:", result.profile ? "found profileId=" + result.profile.id : "not_found");
+    if (result.profile) {
+      setProfileId(result.profile.id);
     }
-
-    const legacySnap = await getDoc(doc(db, "users", addr));
-    if (legacySnap.exists()) {
-      const legacyData = legacySnap.data() as Record<string, unknown>;
-      const migratedId = legacyData.profileId as string || addr;
-      setProfileId(migratedId);
-      return mapUserProfile(migratedId, legacyData);
-    }
-
-    return null;
-  } catch {
+    return result.profile;
+  } catch (err) {
+    console.warn("[ProfileGuard] getProfileByWalletAddress error:", err);
     return null;
   }
 }
 
-export async function getProfile(profileId: string): Promise<UserProfile | null> {
-  if (!profileId) return null;
+export async function getProfile(profileId: string, walletAddress?: string): Promise<UserProfile | null> {
+  if (!profileId) {
+    console.warn("[ProfileGuard] getProfile called with empty profileId");
+    return null;
+  }
   try {
-    const snap = await getDoc(doc(db, "users", profileId));
-    if (!snap.exists()) return null;
-    return mapUserProfile(profileId, snap.data() as Record<string, unknown>);
-  } catch {
+    const result = await apiRequest<{ profile: UserProfile | null }>("GET", `/api/profiles?id=${encodeURIComponent(profileId)}`, undefined, walletAddress);
+    console.info("[ProfileGuard] getProfile API result:", result.profile ? "found user " + profileId : "not_found");
+    return result.profile;
+  } catch (err) {
+    console.warn("[ProfileGuard] getProfile error:", err);
     return null;
   }
 }
