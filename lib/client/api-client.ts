@@ -31,7 +31,12 @@ export async function apiRequest<T = unknown>(
     const text = await res.text().catch(() => "");
     console.error("[apiRequest] Response body", { text });
     let error: { message?: string } = { message: res.statusText };
-    try { error = JSON.parse(text); } catch { error = { message: text || res.statusText }; }
+    try {
+      const parsed = JSON.parse(text);
+      error = parsed && typeof parsed === "object" ? parsed : { message: text || res.statusText };
+    } catch {
+      error = { message: text || res.statusText };
+    }
     throw new Error(error.message || `API ${method} ${path} failed (${res.status})`);
   }
 

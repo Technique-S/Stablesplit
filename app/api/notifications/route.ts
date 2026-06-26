@@ -59,7 +59,15 @@ export async function GET(request: NextRequest) {
       mapNotification(d.id, d.data() as Record<string, unknown>)
     );
 
-    console.log("[Notifications API] GET success, count:", notifications.length, "unread:", unreadSnap.data().count);
+    console.debug("[Notification API] GET", {
+      profileId,
+      notificationCount: notifications.length,
+    });
+    console.debug("[Notification API] unread count", {
+      profileId,
+      unreadCount: unreadSnap.data().count,
+    });
+
     return okResponse({
       notifications,
       unreadCount: unreadSnap.data().count,

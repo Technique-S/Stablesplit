@@ -33,10 +33,12 @@ export default function NotificationBell() {
 
   const fetchData = useCallback(async () => {
     if (!profileId) return;
+    console.debug("[Notifications] fetchData start", { profileId });
     const [count, list] = await Promise.all([
       getUnreadCount(profileId, address),
       getNotifications(profileId, 30, address),
     ]);
+    console.debug("[Notifications] fetchData complete", { unreadCount: count, notificationCount: list.length });
     setUnreadCount(count);
     setNotifications(list);
   }, [profileId, address]);
@@ -45,11 +47,20 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!profileId) return;
-    void fetchData();
-    const interval = setInterval(fetchData, POLL_INTERVAL);
+    console.debug("[Notifications] Starting poll interval");
+    fetchData().catch((error) => {
+      console.error("[NotificationBell] Initial fetch failure", error);
+    });
+    const interval = setInterval(() => {
+      fetchData().catch((error) => {
+        console.error("[NotificationBell] Polling failure", error);
+      });
+    }, POLL_INTERVAL);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void fetchData();
+        fetchData().catch((error) => {
+          console.error("[NotificationBell] Visibility refresh failure", error);
+        });
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -62,7 +73,9 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    void fetchData().finally(() => setLoading(false));
+    fetchData().catch((error) => {
+      console.error("[NotificationBell] Panel refresh failure", error);
+    }).finally(() => setLoading(false));
   }, [open, fetchData]);
 
   useEffect(() => {

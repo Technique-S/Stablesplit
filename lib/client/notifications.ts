@@ -32,7 +32,7 @@ export async function getNotifications(profileId: string, limitCount = 50, walle
       message: e instanceof Error ? e.message : String(e),
       stack: e instanceof Error ? e.stack : undefined,
     });
-    throw e;
+    return [];
   }
 }
 
@@ -54,7 +54,7 @@ export async function getUnreadCount(profileId: string, walletAddress?: string):
       message: e instanceof Error ? e.message : String(e),
       stack: e instanceof Error ? e.stack : undefined,
     });
-    throw e;
+    return 0;
   }
 }
 
@@ -75,7 +75,7 @@ export async function markNotificationAsRead(profileId: string, notificationId: 
       message: e instanceof Error ? e.message : String(e),
       stack: e instanceof Error ? e.stack : undefined,
     });
-    throw e;
+    return;
   }
 }
 
@@ -94,6 +94,6 @@ export async function markAllNotificationsAsRead(profileId: string, walletAddres
       message: e instanceof Error ? e.message : String(e),
       stack: e instanceof Error ? e.stack : undefined,
     });
-    throw e;
+    return;
   }
 }
