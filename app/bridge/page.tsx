@@ -36,6 +36,7 @@ export default function BridgePage() {
 
   const failedResultRef = useRef<BridgeResult | null>(null);
   const adapterRef = useRef<any>(null);
+  const estimatedFeeRef = useRef<string>("0");
 
   const availableChains = TESTNET_BRIDGE_CHAINS.filter(
     (c) => c.value !== fromChain
@@ -101,15 +102,15 @@ export default function BridgePage() {
     setQuoteError(null);
     try {
       const adapter = await getCachedAdapter();
-      const maxFee = String(Math.min(Number(amount) * 0.5, 5));
       const estimate = await estimateBridge({
         from: { adapter, chain: fromChain },
         to: { adapter, chain: toChain, useForwarder: true },
         amount,
         token: "USDC",
-        config: { maxFee },
       });
       setEstimatedReceive(estimate.amount);
+      const fee = Math.max(0, Number(amount) - Number(estimate.amount));
+      estimatedFeeRef.current = String(fee * 1.1 || "0.5");
       const feeByToken = estimate.gasFees
         .filter((g) => g.fees && g.fees.fee != null)
         .reduce<Map<string, bigint>>((acc, g) => {
@@ -147,7 +148,7 @@ export default function BridgePage() {
     try {
       const adapter = await getCachedAdapter();
       setStatusMessage("Waiting for wallet confirmation...");
-      const maxFee = String(Math.min(Number(amount) * 0.5, 5));
+      const maxFee = estimatedFeeRef.current;
       const result = await executeBridge({
         from: { adapter, chain: fromChain },
         to: { adapter, chain: toChain, useForwarder: true },
