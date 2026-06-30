@@ -125,7 +125,6 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
           position: "fixed",
           inset: 0,
           background: "var(--overlay)",
-          backdropFilter: "blur(4px)",
           zIndex: 100,
         }}
       />
@@ -291,10 +290,11 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Description */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-title" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Title *
               </label>
               <input
+                id="expense-title"
                 className="input-field"
                 placeholder="e.g. Dinner at Nobu"
                 value={description}
@@ -304,10 +304,11 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Date */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-date" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Date
               </label>
               <input
+                id="expense-date"
                 className="input-field"
                 type="date"
                 value={date}
@@ -317,7 +318,7 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Amount */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-amount" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Amount *
               </label>
               <div style={{ position: "relative" }}>
@@ -331,6 +332,7 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
                   {expenseCurrency}
                 </span>
                 <input
+                  id="expense-amount"
                   className="input-field mono"
                   type="number"
                   min="0"
@@ -350,10 +352,11 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Currency */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-currency" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Currency
               </label>
               <select
+                id="expense-currency"
                 className="input-field"
                 value={expenseCurrency}
                 onChange={(e) => setExpenseCurrency(e.target.value as SupportedCurrency)}
@@ -367,10 +370,11 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Paid by */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-paidby" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Paid by
               </label>
               <select
+                id="expense-paidby"
                 className="input-field"
                 value={paidBy}
                 onChange={(e) => setPaidBy(e.target.value)}
@@ -417,10 +421,11 @@ export default function AddExpenseModal({ groupId, members, currency, onClose, o
 
             {/* Notes */}
             <div style={{ marginTop: "1.25rem", marginBottom: "0.5rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              <label htmlFor="expense-notes" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Notes
               </label>
               <textarea
+                id="expense-notes"
                 className="input-field"
                 rows={3}
                 placeholder="Optional details"

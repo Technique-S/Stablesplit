@@ -101,11 +101,13 @@ export default function BridgePage() {
     setQuoteError(null);
     try {
       const adapter = await getCachedAdapter();
+      const maxFee = String(Math.min(Number(amount) * 0.5, 5));
       const estimate = await estimateBridge({
         from: { adapter, chain: fromChain },
-        to: { adapter, chain: toChain },
+        to: { adapter, chain: toChain, useForwarder: true },
         amount,
         token: "USDC",
+        config: { maxFee },
       });
       setEstimatedReceive(estimate.amount);
       const feeByToken = estimate.gasFees
@@ -145,22 +147,13 @@ export default function BridgePage() {
     try {
       const adapter = await getCachedAdapter();
       setStatusMessage("Waiting for wallet confirmation...");
-      const toChainConfig = getBridgeChainConfig(toChain);
-      if (toChainConfig && chainId !== toChainConfig.chainId) {
-        try {
-          await switchChainAsync({ chainId: toChainConfig.chainId });
-          if (fromChainConfig && toChainConfig.chainId !== fromChainConfig.chainId) {
-            await switchChainAsync({ chainId: fromChainConfig.chainId });
-          }
-        } catch {
-          /* proceed — SDK will try to switch internally */
-        }
-      }
+      const maxFee = String(Math.min(Number(amount) * 0.5, 5));
       const result = await executeBridge({
         from: { adapter, chain: fromChain },
-        to: { adapter, chain: toChain },
+        to: { adapter, chain: toChain, useForwarder: true },
         amount,
         token: "USDC",
+        config: { maxFee },
       });
       if (result.state === "success") {
         setStep("done");
@@ -204,17 +197,6 @@ export default function BridgePage() {
     setStatusMessage("Retrying bridge from last step...");
     try {
       const adapter = await getCachedAdapter();
-      const toChainConfig = getBridgeChainConfig(toChain);
-      if (toChainConfig && chainId !== toChainConfig.chainId) {
-        try {
-          await switchChainAsync({ chainId: toChainConfig.chainId });
-          if (fromChainConfig && toChainConfig.chainId !== fromChainConfig.chainId) {
-            await switchChainAsync({ chainId: fromChainConfig.chainId });
-          }
-        } catch {
-          /* proceed — SDK will try to switch internally */
-        }
-      }
       const retryResult = await retryBridge(result, { from: adapter, to: adapter });
       if (retryResult.state === "success") {
         failedResultRef.current = null;

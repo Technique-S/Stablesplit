@@ -43,8 +43,8 @@ export default function Navbar() {
     background: scrolled
       ? (isDark ? "rgba(15,15,15,0.60)" : "rgba(255,255,255,0.40)")
       : "var(--nav-bg)",
-    backdropFilter: scrolled ? "blur(30px) saturate(1.4)" : "blur(16px)",
-    WebkitBackdropFilter: scrolled ? "blur(30px) saturate(1.4)" : "blur(16px)",
+    backdropFilter: scrolled ? "blur(12px) saturate(1.4)" : "blur(8px)",
+    WebkitBackdropFilter: scrolled ? "blur(12px) saturate(1.4)" : "blur(8px)",
     borderBottom: scrolled ? "1px solid var(--nav-border)" : "1px solid transparent",
     position: "sticky" as const,
     top: 0,
@@ -238,8 +238,8 @@ export default function Navbar() {
             style={{
               borderTop: "1px solid var(--border)",
               background: isDark ? "rgba(26,26,26,0.92)" : "rgba(255,255,255,0.85)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
               padding: "0.75rem 1rem",
               display: "flex",
               flexDirection: "column",

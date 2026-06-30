@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AccordionSection from "@/components/shared/AccordionSection";
+import StatCard from "@/components/shared/StatCard";
 import FloatingActionMenu from "@/components/layout/FloatingActionMenu";
 import AddExpenseModal from "@/components/expense/AddExpenseModal";
 import ConfirmModal from "@/components/shared/ConfirmModal";
@@ -527,29 +528,23 @@ export default function GroupPage() {
             <div style={{
               display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.75rem",
             }}>
-              {[
-                { label: "Total Expenses", value: `${group.currency} ${totalSpend.toFixed(2)}` },
-                { label: "Total Settled", value: `${group.currency} ${totalSettled.toFixed(2)}`, color: "var(--green)" },
-                { label: "Outstanding Debt", value: `${group.currency} ${outstandingDebt.toFixed(2)}`, color: outstandingDebt > 0.01 ? "var(--red)" : "var(--green)" },
-                { label: "Members", value: group.members.length },
-                { label: "Expenses", value: expenses.length },
-                { label: "Settlements", value: completedPayments.length },
-              ].map((stat) => (
-                <div key={stat.label} style={{
-                  padding: "0.75rem", borderRadius: 8, background: "var(--surface-2)",
-                  textAlign: "center",
-                }}>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: "0.9375rem", color: stat.color ?? "var(--text)" }}>
-                    {stat.value}
-                    {stat.label === "Outstanding Debt" && Math.abs(outstandingDebt) < 0.01 && (
-                      <span style={{ color: "var(--green)", fontWeight: 600 }}> 0.00</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: "0.6875rem", color: "var(--text-3)", marginTop: "0.125rem", fontWeight: 600 }}>
-                    {stat.label}
-                  </div>
+              <StatCard compact label="Total Expenses" value={`${group.currency} ${totalSpend.toFixed(2)}`} />
+              <StatCard compact label="Total Settled" value={`${group.currency} ${totalSettled.toFixed(2)}`} color="var(--green)" />
+              <div style={{ padding: "0.75rem", borderRadius: 8, background: "var(--surface-2)", textAlign: "center" }}>
+                <div className="mono" style={{ fontWeight: 700, fontSize: "0.9375rem", color: outstandingDebt > 0.01 ? "var(--red)" : "var(--green)" }}>
+                  {Math.abs(outstandingDebt) < 0.01 ? (
+                    <span>0.00</span>
+                  ) : (
+                    `${group.currency} ${outstandingDebt.toFixed(2)}`
+                  )}
                 </div>
-              ))}
+                <div style={{ fontSize: "0.6875rem", color: "var(--text-3)", marginTop: "0.125rem", fontWeight: 600 }}>
+                  Outstanding Debt
+                </div>
+              </div>
+              <StatCard compact label="Members" value={group.members.length} />
+              <StatCard compact label="Expenses" value={expenses.length} />
+              <StatCard compact label="Settlements" value={completedPayments.length} />
             </div>
           </AccordionSection>
         ) : (
@@ -931,7 +926,7 @@ export default function GroupPage() {
                           onClick={() => setViewingExpense(exp)}
                           className="btn-secondary"
                           title="View expense"
-                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
+                          style={{ padding: "0.5rem 0.75rem", fontSize: "0.75rem" }}
                         >
                           View
                         </button>
@@ -941,7 +936,7 @@ export default function GroupPage() {
                             onClick={() => pauseRecurrence(id, exp.id)}
                             className="btn-secondary"
                             title="Pause recurrence"
-                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.6875rem" }}
+                            style={{ padding: "0.5rem 0.75rem", fontSize: "0.75rem" }}
                           >
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2" y="1" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="7" y="1" width="3" height="10" rx="0.5" fill="currentColor"/></svg>
                           </button>
@@ -1453,7 +1448,6 @@ function ExpenseDetailsModal({ expense, currency, onClose }: { expense: Expense;
           position: "fixed",
           inset: 0,
           background: "var(--overlay)",
-          backdropFilter: "blur(4px)",
           zIndex: 100,
         }}
       />
@@ -1538,7 +1532,6 @@ function ActivityPanel({
           position: "fixed",
           inset: 0,
           background: "var(--overlay)",
-          backdropFilter: "blur(4px)",
           zIndex: 100,
         }}
       />

@@ -40,6 +40,7 @@ export default function GroupImageUpload({ groupName, currentPhotoURL, onImageCh
     <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
       <div
         onClick={() => fileInputRef.current?.click()}
+        className="img-upload-trigger"
         style={{
           width: 64, height: 64, borderRadius: 14, flexShrink: 0,
           background: src ? "transparent" : "var(--surface-2)",
@@ -49,8 +50,6 @@ export default function GroupImageUpload({ groupName, currentPhotoURL, onImageCh
           transition: "border-color 0.15s ease",
         }}
         title="Upload group image"
-        onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--border-hover)"}
-        onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
       >
         {src ? (
           <img src={src} alt="Group" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }} />
@@ -59,15 +58,13 @@ export default function GroupImageUpload({ groupName, currentPhotoURL, onImageCh
             {groupName.slice(0, 2).toUpperCase()}
           </span>
         )}
-        <div style={{
+        <div className="upload-overlay" style={{
           position: "absolute", inset: 0, borderRadius: 12,
-          background: "rgba(0,0,0,0.3)", opacity: 0,
+          background: "rgba(0,0,0,0.3)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#fff", fontSize: "0.75rem", fontWeight: 600,
+          color: "var(--on-brand)", fontSize: "0.75rem", fontWeight: 600,
           transition: "opacity 0.15s ease",
         }}
-          onMouseEnter={(e) => e.currentTarget.style.opacity = "1"}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = "0"}
         >
           Upload
         </div>

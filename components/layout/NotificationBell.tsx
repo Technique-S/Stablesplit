@@ -33,12 +33,10 @@ export default function NotificationBell() {
 
   const fetchData = useCallback(async () => {
     if (!profileId) return;
-    console.debug("[Notifications] fetchData start", { profileId });
     const [count, list] = await Promise.all([
       getUnreadCount(profileId, address),
       getNotifications(profileId, 30, address),
     ]);
-    console.debug("[Notifications] fetchData complete", { unreadCount: count, notificationCount: list.length });
     setUnreadCount(count);
     setNotifications(list);
   }, [profileId, address]);
@@ -47,20 +45,13 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!profileId) return;
-    console.debug("[Notifications] Starting poll interval");
-    fetchData().catch((error) => {
-      console.error("[NotificationBell] Initial fetch failure", error);
-    });
+    fetchData().catch(() => {});
     const interval = setInterval(() => {
-      fetchData().catch((error) => {
-        console.error("[NotificationBell] Polling failure", error);
-      });
+      fetchData().catch(() => {});
     }, POLL_INTERVAL);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        fetchData().catch((error) => {
-          console.error("[NotificationBell] Visibility refresh failure", error);
-        });
+        fetchData().catch(() => {});
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -73,9 +64,7 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    fetchData().catch((error) => {
-      console.error("[NotificationBell] Panel refresh failure", error);
-    }).finally(() => setLoading(false));
+    fetchData().catch(() => {}).finally(() => setLoading(false));
   }, [open, fetchData]);
 
   useEffect(() => {
@@ -159,7 +148,7 @@ export default function NotificationBell() {
               height: 18,
               borderRadius: 999,
               background: "var(--red)",
-              color: "#fff",
+              color: "var(--toast-text)",
               fontSize: "0.625rem",
               fontWeight: 700,
               display: "flex",
@@ -227,18 +216,13 @@ export default function NotificationBell() {
                   <div
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}
+                    className={n.read ? "notif-item" : "notif-item notif-item-unread"}
                     style={{
                       display: "flex",
                       gap: "0.75rem",
                       padding: "0.75rem 1.25rem",
                       cursor: "pointer",
-                      transition: "background 0.15s",
-                      background: n.read ? "transparent" : "var(--blue-light)",
                       borderBottom: "1px solid var(--border)",
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-2)"}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = n.read ? "transparent" : "var(--blue-light)";
                     }}
                   >
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: n.read ? "transparent" : "var(--blue)", flexShrink: 0, marginTop: "0.375rem" }} />
@@ -257,8 +241,8 @@ export default function NotificationBell() {
                           e.stopPropagation();
                           void handleMarkRead(n);
                         }}
+                        aria-label="Mark as read"
                         style={{ border: "none", background: "none", color: "var(--text-3)", cursor: "pointer", fontSize: "0.75rem", padding: "0.125rem 0.25rem", flexShrink: 0, fontFamily: "DM Sans, sans-serif" }}
-                        title="Mark as read"
                       >
                         ✓
                       </button>

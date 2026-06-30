@@ -30,14 +30,35 @@ export default function Modal({
     const prev = document.activeElement as HTMLElement | null;
     modalRef.current?.focus();
 
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !modalRef.current) return;
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
       prev?.focus();
     };
@@ -54,7 +75,6 @@ export default function Modal({
           position: "fixed",
           inset: 0,
           background: "var(--overlay)",
-          backdropFilter: "blur(4px)",
           zIndex: 100,
         }}
       />

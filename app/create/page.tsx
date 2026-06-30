@@ -121,7 +121,6 @@ export default function CreateGroupPage() {
       router.push(`/group/${groupId}?created=1`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.error("[create-group] Error:", error);
       setError("Failed to create group: " + msg);
       setLoading(false);
     }
@@ -180,10 +179,11 @@ export default function CreateGroupPage() {
 
             {/* Group name */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
+              <label htmlFor="group-name" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
                 Group Name *
               </label>
               <input
+                id="group-name"
                 className="input-field"
                 placeholder="e.g. Bali Trip 2025"
                 value={name}
@@ -193,10 +193,11 @@ export default function CreateGroupPage() {
 
             {/* Description */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
+              <label htmlFor="group-desc" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
                 Description <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(optional)</span>
               </label>
               <textarea
+                id="group-desc"
                 className="input-field"
                 placeholder="What's this group for?"
                 value={description}
@@ -252,11 +253,12 @@ export default function CreateGroupPage() {
 
             {/* Members */}
             <div>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
+              <label htmlFor="member-name" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
                 Members <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(you are auto-added)</span>
               </label>
               <div className="member-input-row" style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
                 <input
+                  id="member-name"
                   className="input-field"
                   placeholder="Enter a name and press Add"
                   value={memberInput}
@@ -325,6 +327,7 @@ export default function CreateGroupPage() {
                       {!isCreator && (
                       <button
                         onClick={() => removeMember(m.id)}
+                        aria-label={`Remove ${m.displayName}`}
                         style={{
                           background: "none",
                           border: "none",

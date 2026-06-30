@@ -91,10 +91,11 @@ export default function CreateProfilePage() {
             </div>
 
             <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
+              <label htmlFor="display-name" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text)" }}>
                 Display Name *
               </label>
               <input
+                id="display-name"
                 className="input-field"
                 placeholder="Your name"
                 value={displayName}

@@ -63,7 +63,7 @@ export default function ExportModal({ group, expenses, settlementPayments, activ
 
   return (
     <>
-      <div onClick={onClose} className="animate-backdrop" style={{ position: "fixed", inset: 0, background: "var(--overlay)", backdropFilter: "blur(4px)", zIndex: 100 }} />
+      <div onClick={onClose} className="animate-backdrop" style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 100 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 101, display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(0.75rem, 3vw, 2rem)", pointerEvents: "none" }}>
         <div className="animate-scale-in" style={{ width: "min(480px, 100%)", background: "var(--surface)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", overflow: "hidden", pointerEvents: "auto" }}>
           <div style={{ padding: "1.5rem 1.75rem 1.25rem", borderBottom: "1px solid var(--border)" }}>

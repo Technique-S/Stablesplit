@@ -41,6 +41,7 @@ export default function ProfileAvatarUpload({ currentAvatarURL, displayName, onI
     <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
       <div
         onClick={() => fileInputRef.current?.click()}
+        className="img-upload-trigger"
         style={{
           width: 80, height: 80, borderRadius: "50%", flexShrink: 0,
           background: src ? "transparent" : "var(--surface-2)",
@@ -50,8 +51,6 @@ export default function ProfileAvatarUpload({ currentAvatarURL, displayName, onI
           transition: "border-color 0.15s ease",
         }}
         title="Upload avatar"
-        onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--border-hover)"}
-        onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
       >
         {src ? (
           <img src={src} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
@@ -60,15 +59,13 @@ export default function ProfileAvatarUpload({ currentAvatarURL, displayName, onI
             {initials}
           </span>
         )}
-        <div style={{
+        <div className="upload-overlay" style={{
           position: "absolute", inset: 0, borderRadius: "50%",
-          background: "rgba(0,0,0,0.3)", opacity: 0,
+          background: "rgba(0,0,0,0.3)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#fff", fontSize: "0.75rem", fontWeight: 600,
+          color: "var(--on-brand)", fontSize: "0.75rem", fontWeight: 600,
           transition: "opacity 0.15s ease",
         }}
-          onMouseEnter={(e) => e.currentTarget.style.opacity = "1"}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = "0"}
         >
           Upload
         </div>

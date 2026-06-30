@@ -372,9 +372,14 @@ export default function ProfilePage() {
                               )}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
-                                {g.name}
-                              </p>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
+                                  {g.name}
+                                </p>
+                                <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "var(--blue)", background: "var(--blue-light)", padding: "0.125rem 0.375rem", borderRadius: 4, letterSpacing: "0.01em", textTransform: "uppercase" }}>
+                                  Owner
+                                </span>
+                              </div>
                               <p style={{ color: "var(--text-2)", fontSize: "0.75rem", marginTop: "0.125rem" }}>
                                 {g.members.length} member{g.members.length !== 1 ? "s" : ""} · {g.currency}
                               </p>

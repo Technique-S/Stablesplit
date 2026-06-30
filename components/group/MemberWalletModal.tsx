@@ -70,7 +70,6 @@ export default function MemberWalletModal({ group, member, onClose, onSaved }: P
           position: "fixed",
           inset: 0,
           background: "var(--overlay)",
-          backdropFilter: "blur(4px)",
           zIndex: 100,
         }}
       />

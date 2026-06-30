@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { Group, Expense, SettlementPayment, ActivityRecord } from "@/lib/types";
+import StatCard from "@/components/shared/StatCard";
 import { useProfileCheck } from "@/lib/use-profile-check";
 import { calculateBalances, calculateSettlements, computeAdjustedBalances } from "@/lib/calculations";
 import { getAvatarColor } from "@/lib/domain/members";
@@ -168,22 +169,13 @@ export default function ReportPage() {
           marginBottom: "1.5rem",
         }}>
           {statCards.map((stat) => (
-            <div key={stat.label} className="card" style={{ padding: "0.75rem", textAlign: "center" }}>
-              <div style={{
-                width: 28, height: 28, margin: "0 auto 0.5rem", borderRadius: 8,
-                background: stat.color + "18",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "0.8rem",
-              }}>
-                {stat.icon}
-              </div>
-              <div className="mono" style={{ fontWeight: 700, fontSize: "0.9375rem", color: "var(--text)" }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: "0.6875rem", color: "var(--text-3)", marginTop: "0.125rem", fontWeight: 600 }}>
-                {stat.label}
-              </div>
-            </div>
+            <StatCard
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              icon={<span style={{ fontSize: "0.8rem" }}>{stat.icon}</span>}
+              color={stat.color}
+            />
           ))}
         </div>
 

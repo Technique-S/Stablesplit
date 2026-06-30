@@ -13,6 +13,7 @@ import { Group, Balance, SettlementPayment, ActivityRecord } from "@/lib/types";
 import { formatTime } from "@/lib/client/format";
 import { memberInitials, memberNames, getAvatarColor } from "@/lib/domain/members";
 import { CardSkeleton, ActivitySkeleton } from "@/components/ui/Skeleton";
+import StatCard from "@/components/shared/StatCard";
 
 interface GroupBalance {
   groupId: string;
@@ -80,17 +81,10 @@ export default function DashboardPage() {
     setAggregateLoading(true);
 
     try {
-      console.debug("[Dashboard] calling getGroups with address:", address);
       const groups = address ? await getGroups(address) : [];
-      console.debug("[Dashboard] getGroups returned", groups.length, "groups");
-      if (groups.length > 0) {
-        console.debug("[Dashboard] group IDs returned:", JSON.stringify(groups.map((g) => g.id)));
-        console.debug("[Dashboard] group names:", JSON.stringify(groups.map((g) => g.name)));
-      }
       if (loadCancelledRef.current) return;
 
       // ── Defensive membership check: verify user is actually a member ──
-      console.debug("[Dashboard] walletLower:", walletLower);
       const verified = groups.filter((g) => {
         const byCreator = g.createdBy?.toLowerCase() === walletLower;
         const byMemberWallet = g.members.some(
@@ -106,10 +100,6 @@ export default function DashboardPage() {
 
         return false;
       });
-      console.debug("[Dashboard] verified count:", verified.length, "out of", groups.length);
-      if (verified.length < groups.length) {
-        console.debug("[Dashboard] filtered out IDs:", JSON.stringify(groups.filter((g) => !verified.includes(g)).map((g) => g.id)));
-      }
 
       const createdSet = new Set(profile.createdGroupIds);
       const joinedSet = new Set(profile.joinedGroupIds);
@@ -118,13 +108,10 @@ export default function DashboardPage() {
         ...verified.filter((g) => createdSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
         ...verified.filter((g) => !createdSet.has(g.id) && joinedSet.has(g.id)).sort((a, b) => b.createdAt - a.createdAt),
       ];
-      console.debug("[Dashboard] ordered count:", ordered.length);
-
       setAllGroups(ordered);
       if (loadCancelledRef.current) return;
 
       if (ordered.length === 0) {
-        console.debug("[Dashboard] ordered is empty - returning early (no groups to process)");
         setLoading(false);
         return;
       }
@@ -203,8 +190,7 @@ export default function DashboardPage() {
       setRecentActivity(allActivity);
 
       setAggregateLoading(false);
-    } catch (error) {
-      console.error("[Dashboard] Failed to load data.", error);
+    } catch {
       setError("Failed to load dashboard data.");
     } finally {
       setLoading(false);
@@ -224,8 +210,7 @@ export default function DashboardPage() {
     try {
         const groupId = await generateDemoGroup(address);
       router.push(`/group/${groupId}?demo=1`);
-    } catch (error) {
-      console.error("[Dashboard] Failed to generate demo group.", error);
+    } catch {
       setDemoError("Could not generate demo group. Check Firestore connectivity.");
     } finally {
       setDemoLoading(false);
@@ -312,50 +297,35 @@ export default function DashboardPage() {
         {/* Stats */}
         {hasProfileData && (
           <div className="stagger-children" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
-            <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--blue-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="1" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="1" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/></svg>
-              </div>
-              <div>
-                <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>{allGroups.length}</div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-2)", fontWeight: 500 }}>Groups</div>
-              </div>
-            </div>
-            <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--green-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4V16M4 10H16" stroke="var(--green)" strokeWidth="2" strokeLinecap="round"/></svg>
-              </div>
-              <div>
-                <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-                  {aggregateLoading ? "..." : `${allGroups[0]?.currency ?? ""} ${totalOutstanding.toFixed(2)}`}
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-2)", fontWeight: 500 }}>Owed to you</div>
-              </div>
-            </div>
+            <StatCard
+              label="Groups"
+              value={allGroups.length}
+              icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="1" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="1" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="1" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/><rect x="11" y="11" width="8" height="8" rx="2" stroke="var(--blue)" strokeWidth="1.5"/></svg>}
+              layout="row"
+              className="card-hover"
+            />
+            <StatCard
+              label="Owed to you"
+              value={aggregateLoading ? "..." : `${allGroups[0]?.currency ?? ""} ${totalOutstanding.toFixed(2)}`}
+              icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4V16M4 10H16" stroke="var(--green)" strokeWidth="2" strokeLinecap="round"/></svg>}
+              layout="row"
+              className="card-hover"
+            />
             {totalOwed > 0 && (
-              <div className="card card-hover" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-                <div style={{ width: 40, height: 40, background: "var(--red-light)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10H16" stroke="var(--red)" strokeWidth="2" strokeLinecap="round"/></svg>
-                </div>
-                <div>
-                  <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-                    {aggregateLoading ? "..." : `${allGroups[0]?.currency ?? ""} ${totalOwed.toFixed(2)}`}
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-2)", fontWeight: 500 }}>You owe</div>
-                </div>
-              </div>
+              <StatCard
+                label="You owe"
+                value={aggregateLoading ? "..." : `${allGroups[0]?.currency ?? ""} ${totalOwed.toFixed(2)}`}
+                icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10H16" stroke="var(--red)" strokeWidth="2" strokeLinecap="round"/></svg>}
+                layout="row"
+                className="card-hover"
+              />
             )}
-            <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ width: 40, height: 40, background: "var(--surface-2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="var(--text-2)" strokeWidth="1.5"/><path d="M6 10L9 13L14 7" stroke="var(--text-2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
-              <div>
-                <div className="mono" style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
-                  {aggregateLoading ? "..." : recentSettlements.length}
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-2)", fontWeight: 500 }}>Settlements</div>
-              </div>
-            </div>
+            <StatCard
+              label="Settlements"
+              value={aggregateLoading ? "..." : recentSettlements.length}
+              icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="var(--text-2)" strokeWidth="1.5"/><path d="M6 10L9 13L14 7" stroke="var(--text-2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              layout="row"
+            />
           </div>
         )}
 
@@ -466,7 +436,7 @@ export default function DashboardPage() {
             </section>
 
             {/* Two-column: Balances + Quick Actions */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginBottom: "2rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
               {/* Balances table */}
               <div className="card" style={{ padding: "1.5rem" }}>
                 <h3 style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "-0.02em", marginBottom: "1rem" }}>

@@ -69,7 +69,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     border-radius: 6px;
     border: 1px solid rgba(255,255,255,0.3);
     background: rgba(255,255,255,0.1);
-    color: #fff;
+    color: var(--toast-text);
     font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
@@ -104,7 +104,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               gap: "0.625rem",
               padding: "0.75rem 1rem",
               background: bgMap[t.kind],
-              color: "#fff",
+              color: "var(--toast-text)",
               borderRadius: 10,
               boxShadow: "var(--shadow-lg)",
               fontSize: "0.875rem",
