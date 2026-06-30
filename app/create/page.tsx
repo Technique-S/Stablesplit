@@ -70,6 +70,21 @@ export default function CreateGroupPage() {
     setMembers((current) => current.map((member) => member.id === memberId ? { ...member, walletAddress } : member));
   };
 
+  const resolveMemberWallet = useCallback(async (memberId: string, walletAddress: string) => {
+    if (!walletAddress || !validateEvmAddress(walletAddress)) return;
+    try {
+      const res = await fetch(`/api/wallet/resolve?address=${encodeURIComponent(walletAddress)}`);
+      const data = await res.json();
+      if (data.found && data.displayName) {
+        setMembers((current) => current.map((member) =>
+          member.id === memberId ? { ...member, displayName: data.displayName, walletAddress } : member
+        ));
+      }
+    } catch {
+      // silent
+    }
+  }, []);
+
   const allMembers = creatorMember ? [creatorMember, ...members] : members;
 
   const handleSubmit = async () => {
@@ -329,6 +344,7 @@ export default function CreateGroupPage() {
                           placeholder="Wallet address"
                           value={m.walletAddress ?? ""}
                           onChange={(e) => updateMemberWallet(m.id, e.target.value)}
+                          onBlur={(e) => resolveMemberWallet(m.id, e.target.value)}
                           style={{ fontSize: "0.75rem", padding: "0.45rem 0.625rem" }}
                         />
                         {walletReady && !isCreator && (

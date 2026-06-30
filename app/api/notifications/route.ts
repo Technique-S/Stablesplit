@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { adminDb, resolveProfileId } from "@/lib/server/firebase-admin";
 import { toMillis } from "@/lib/timestamp";
 
 function mapNotification(id: string, data: Record<string, unknown>) {
@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const profileId = searchParams.get("profileId");
     const limitParam = searchParams.get("limit");
+    const countOnly = searchParams.get("countOnly") === "true";
 
     if (!profileId) {
       return errorResponse("profileId query parameter is required.", 400);
@@ -41,18 +42,24 @@ export async function GET(request: NextRequest) {
     console.log("[Notifications API] GET profileId:", profileId);
     await assertProfileOwnership(auth.walletAddress, profileId);
 
+    const unreadSnap = await adminDb
+      .collection("users").doc(profileId).collection("notifications")
+      .where("read", "==", false)
+      .count()
+      .get();
+
+    const unreadCount = unreadSnap.data().count;
+
+    if (countOnly) {
+      return okResponse({ unreadCount });
+    }
+
     const limitCount = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 200) : 50;
 
     const notificationsSnap = await adminDb
       .collection("users").doc(profileId).collection("notifications")
       .orderBy("createdAt", "desc")
       .limit(limitCount)
-      .get();
-
-    const unreadSnap = await adminDb
-      .collection("users").doc(profileId).collection("notifications")
-      .where("read", "==", false)
-      .count()
       .get();
 
     const notifications = notificationsSnap.docs.map((d) =>
@@ -65,12 +72,12 @@ export async function GET(request: NextRequest) {
     });
     console.debug("[Notification API] unread count", {
       profileId,
-      unreadCount: unreadSnap.data().count,
+      unreadCount,
     });
 
     return okResponse({
       notifications,
-      unreadCount: unreadSnap.data().count,
+      unreadCount,
     });
   } catch (error) {
     console.error("[Notifications API] GET error:", {

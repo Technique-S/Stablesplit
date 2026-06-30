@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId, resolveProfileName } from "@/lib/server/firebase-admin";
 import { notifyGroupMembers } from "@/lib/server/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { updateGroupBaseSchema } from "@/lib/domain/schemas";
@@ -81,14 +81,23 @@ export async function PATCH(
       if (!member || !member.displayName) {
         return errorResponse("Member must have a displayName.", 400);
       }
+      let memberDisplayName = String(member.displayName ?? "").trim();
+      let memberProfileId = member.profileId ? String(member.profileId).trim() : undefined;
+      if (!memberProfileId && member.walletAddress) {
+        const resolved = await resolveProfileName(String(member.walletAddress).trim());
+        if (resolved) {
+          memberProfileId = resolved.profileId;
+          if (resolved.displayName) memberDisplayName = resolved.displayName;
+        }
+      }
       const existingMembers = (Array.isArray(group.members) ? group.members : []) as Record<string, unknown>[];
       const nextMembers = [...existingMembers, {
         id: member.id ?? `member-${crypto.randomUUID()}`,
-        displayName: String(member.displayName).trim(),
+        displayName: memberDisplayName,
         walletAddress: member.walletAddress ? String(member.walletAddress).trim() : undefined,
         avatarColor: member.avatarColor ? String(member.avatarColor).trim() : undefined,
         createdAt: typeof member.createdAt === "number" ? member.createdAt : Date.now(),
-        profileId: member.profileId ? String(member.profileId).trim() : undefined,
+        profileId: memberProfileId,
         role: member.role === "owner" || member.role === "member" ? member.role : undefined,
       }];
 
@@ -168,15 +177,27 @@ export async function PATCH(
     if (parsed.templateType !== undefined) updatePayload.templateType = parsed.templateType;
 
     if (parsed.members !== undefined) {
-      const normalizedMembers = parsed.members.map((m) => ({
-        id: m.id ?? `member-${crypto.randomUUID()}`,
-        displayName: String(m.displayName ?? "").trim(),
-        walletAddress: m.walletAddress ? String(m.walletAddress).trim() : undefined,
-        avatarColor: m.avatarColor ? String(m.avatarColor).trim() : undefined,
-        createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
-        profileId: m.profileId ? String(m.profileId).trim() : undefined,
-        role: m.role === "owner" || m.role === "member" ? m.role : undefined,
-      }));
+      const normalizedMembers = await Promise.all(
+        parsed.members.map(async (m) => {
+          const member: Record<string, unknown> = {
+            id: m.id ?? `member-${crypto.randomUUID()}`,
+            displayName: String(m.displayName ?? "").trim(),
+            walletAddress: m.walletAddress ? String(m.walletAddress).trim() : undefined,
+            avatarColor: m.avatarColor ? String(m.avatarColor).trim() : undefined,
+            createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
+            profileId: m.profileId ? String(m.profileId).trim() : undefined,
+            role: m.role === "owner" || m.role === "member" ? m.role : undefined,
+          };
+          if (!member.profileId && member.walletAddress) {
+            const resolved = await resolveProfileName(member.walletAddress as string);
+            if (resolved) {
+              member.profileId = resolved.profileId;
+              if (resolved.displayName) member.displayName = resolved.displayName;
+            }
+          }
+          return member;
+        })
+      );
 
       const memberWallets: Record<string, string> = {};
       for (const m of normalizedMembers as Array<Record<string, unknown>>) {
@@ -205,13 +226,16 @@ export async function PATCH(
       });
 
       resolveProfileId(auth.walletAddress).then((actorProfileId) => {
-        notifyGroupMembers(id, actorProfileId, {
+        console.log("[Notification] ENTER", { endpoint: "PATCH /api/groups/[id]", type: NOTIFICATION_TYPES.GROUP_UPDATED, groupId: id, actorWallet: auth.walletAddress, actorProfileId });
+        return notifyGroupMembers(id, actorProfileId, {
           type: NOTIFICATION_TYPES.GROUP_UPDATED,
           title: "Group Updated",
           message: `Group renamed to "${newName}"`,
           groupId: id,
           groupName: newName,
-        });
+        }, previous as Record<string, unknown>);
+      }).then(() => {
+        console.log("[Notification] EXIT", { endpoint: "PATCH /api/groups/[id]", type: NOTIFICATION_TYPES.GROUP_UPDATED, groupId: id });
       }).catch(() => {});
     }
 
@@ -278,13 +302,16 @@ export async function DELETE(
     });
 
     resolveProfileId(auth.walletAddress).then((actorProfileId) => {
-      notifyGroupMembers(id, actorProfileId, {
+      console.log("[Notification] ENTER", { endpoint: "DELETE /api/groups/[id]", type: NOTIFICATION_TYPES.GROUP_DELETED, groupId: id, actorWallet: auth.walletAddress, actorProfileId });
+      return notifyGroupMembers(id, actorProfileId, {
         type: NOTIFICATION_TYPES.GROUP_DELETED,
         title: "Group Deleted",
         message: `The group "${groupName}" was deleted`,
         groupId: id,
         groupName,
-      });
+      }, group);
+    }).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "DELETE /api/groups/[id]", type: NOTIFICATION_TYPES.GROUP_DELETED, groupId: id });
     }).catch(() => {});
 
     const nestedExpenses = await adminDb.collection("groups").doc(id).collection("expenses").get();

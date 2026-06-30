@@ -70,16 +70,44 @@ export async function addActivity(
 
 export async function resolveProfileId(walletAddress: string): Promise<string | null> {
   const addr = walletAddress.trim().toLowerCase();
+  console.log("[Notification] Resolving profile", { walletAddress: addr });
 
   const linkSnap = await adminDb.collection("walletLinks").doc(addr).get();
   if (linkSnap.exists) {
-    return linkSnap.data()!.profileId as string;
+    const profileId = linkSnap.data()!.profileId as string;
+    console.log("[Notification] Resolved via walletLinks", { walletAddress: addr, profileId });
+    return profileId;
   }
 
   const legacySnap = await adminDb.collection("users").doc(addr).get();
   if (legacySnap.exists) {
     const data = legacySnap.data()!;
-    return (data.profileId as string) || addr;
+    const profileId = (data.profileId as string) || addr;
+    console.log("[Notification] Resolved via legacy users", { walletAddress: addr, profileId });
+    return profileId;
+  }
+
+  console.warn("[Notification] Unresolvable wallet", { walletAddress: addr });
+  return null;
+}
+
+export async function resolveProfileName(walletAddress: string): Promise<{ profileId: string; displayName: string } | null> {
+  const addr = walletAddress.trim().toLowerCase();
+
+  const linkSnap = await adminDb.collection("walletLinks").doc(addr).get();
+  if (linkSnap.exists) {
+    const profileId = linkSnap.data()!.profileId as string;
+    const profileSnap = await adminDb.collection("users").doc(profileId).get();
+    if (profileSnap.exists) {
+      return { profileId, displayName: (profileSnap.data()!.displayName as string) ?? "" };
+    }
+    return { profileId, displayName: "" };
+  }
+
+  const legacySnap = await adminDb.collection("users").doc(addr).get();
+  if (legacySnap.exists) {
+    const profileId = (legacySnap.data()!.profileId as string) || addr;
+    return { profileId, displayName: (legacySnap.data()!.displayName as string) ?? "" };
   }
 
   return null;

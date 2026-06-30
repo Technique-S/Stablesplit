@@ -43,11 +43,9 @@ service cloud.firestore {
                             && request.auth.uid == docId;
     }
 
-    // ── Notifications: users can only read their own; any auth user can create ──
-    match /notifications/{notificationId} {
-      allow read: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null;
+    // ── Notifications: users can only read/write their own notification subcollection ──
+    match /users/{userId}/notifications/{notificationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
   }

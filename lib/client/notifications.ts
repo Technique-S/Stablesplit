@@ -1,10 +1,11 @@
 import { apiRequest } from "./api-client";
 import { AppNotification } from "../types";
+import type { NotificationType } from "@/lib/constants/notification-types";
 
 function mapNotification(data: Record<string, unknown>): AppNotification {
   return {
     id: data.id as string,
-    type: data.type as AppNotification["type"],
+    type: data.type as NotificationType,
     groupId: data.groupId as string,
     groupName: data.groupName as string,
     message: data.message as string,
@@ -41,7 +42,7 @@ export async function getUnreadCount(profileId: string, walletAddress?: string):
   try {
     const data = await apiRequest<{ unreadCount: number }>(
       "GET",
-      `/api/notifications?profileId=${encodeURIComponent(profileId)}&limit=1`,
+      `/api/notifications?profileId=${encodeURIComponent(profileId)}&countOnly=true`,
       undefined,
       walletAddress
     );

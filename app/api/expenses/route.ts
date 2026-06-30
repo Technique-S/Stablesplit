@@ -149,14 +149,17 @@ export async function POST(request: NextRequest) {
     const groupName = String(groupData.name ?? "");
     const groupCurrency = String(groupData.currency ?? "USD");
     resolveProfileId(auth.walletAddress).then((creatorProfileId) => {
-      notifyGroupMembers(parsed.groupId, creatorProfileId, {
+      console.log("[Notification] ENTER", { endpoint: "POST /api/expenses", type: NOTIFICATION_TYPES.EXPENSE_CREATED, groupId: parsed.groupId, actorWallet: auth.walletAddress, creatorProfileId });
+      return notifyGroupMembers(parsed.groupId, creatorProfileId, {
         type: NOTIFICATION_TYPES.EXPENSE_CREATED,
         title: "New Expense",
         message: `${parsed.paidBy} added "${parsed.description}" for ${groupCurrency} ${parsed.amount}`,
         groupId: parsed.groupId,
-        groupName,
+        groupName: groupName,
         actorName: parsed.paidBy,
-      });
+      }, groupData);
+    }).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "POST /api/expenses", type: NOTIFICATION_TYPES.EXPENSE_CREATED, groupId: parsed.groupId });
     }).catch(() => {});
 
     return okResponse({ expenseId }, 201);

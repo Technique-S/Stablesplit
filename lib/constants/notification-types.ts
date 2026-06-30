@@ -5,9 +5,9 @@ export const NOTIFICATION_TYPES = {
   SETTLEMENT_COMPLETED: "settlement_completed",
   MEMBER_JOINED: "member_joined",
   INVITE_ACCEPTED: "invite_accepted",
+  GROUP_CREATED: "group_created",
   GROUP_UPDATED: "group_updated",
   GROUP_DELETED: "group_deleted",
-  BRIDGE_COMPLETED: "bridge_completed",
   TEST: "test",
 } as const;
 

@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
     const recipientPid = resolveSettlementMember(parsed.to);
     const settlementProfileIds = [payerPid, recipientPid].filter(Boolean) as string[];
     if (settlementProfileIds.length > 0) {
+      console.log("[Notification] ENTER", { endpoint: "POST /api/settlements", type: NOTIFICATION_TYPES.SETTLEMENT_COMPLETED, groupId: parsed.groupId, actorWallet: auth.walletAddress, settlementProfileIds });
       notifySpecificMembers(settlementProfileIds, {
         type: NOTIFICATION_TYPES.SETTLEMENT_COMPLETED,
         title: "Settlement Completed",
@@ -119,6 +120,8 @@ export async function POST(request: NextRequest) {
         groupId: parsed.groupId,
         groupName: settlementGroupName,
         actorName: parsed.from,
+      }).then(() => {
+        console.log("[Notification] EXIT", { endpoint: "POST /api/settlements", type: NOTIFICATION_TYPES.SETTLEMENT_COMPLETED, groupId: parsed.groupId });
       }).catch(() => {});
     }
 

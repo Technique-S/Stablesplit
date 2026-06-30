@@ -1,3 +1,5 @@
+import { NotificationType } from "./constants/notification-types";
+
 export interface Member {
   id: string;
   displayName: string;
@@ -166,7 +168,7 @@ export interface ActivityRecord {
 
 export interface AppNotification {
   id: string;
-  type: ActivityEventType;
+  type: NotificationType;
   groupId: string;
   groupName: string;
   message: string;

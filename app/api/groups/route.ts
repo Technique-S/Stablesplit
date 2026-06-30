@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileName } from "@/lib/server/firebase-admin";
+import { notifyGroupMembers } from "@/lib/server/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { groupBaseSchema } from "@/lib/domain/schemas";
 import { toMillis } from "@/lib/timestamp";
 import { safeRandomUUID, generateInviteCode } from "@/lib/server/crypto-utils";
@@ -46,15 +48,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.log("[groups.POST] STEP 4 complete - inviteCode:", inviteCode);
 
     console.log("[groups.POST] STEP 5 - build members payload");
-    const members: Array<Record<string, unknown>> = parsed.members.map((m) => ({
-      id: m.id ?? `member-${safeRandomUUID()}`,
-      displayName: String(m.displayName ?? "").trim(),
-      walletAddress: m.walletAddress ? String(m.walletAddress).trim() : undefined,
-      avatarColor: m.avatarColor ? String(m.avatarColor).trim() : undefined,
-      createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
-      profileId: m.profileId ? String(m.profileId).trim() : undefined,
-      role: m.role === "owner" || m.role === "member" ? m.role : undefined,
-    }));
+    const members: Array<Record<string, unknown>> = await Promise.all(
+      parsed.members.map(async (m) => {
+        const member: Record<string, unknown> = {
+          id: m.id ?? `member-${safeRandomUUID()}`,
+          displayName: String(m.displayName ?? "").trim(),
+          walletAddress: m.walletAddress ? String(m.walletAddress).trim() : undefined,
+          avatarColor: m.avatarColor ? String(m.avatarColor).trim() : undefined,
+          createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
+          profileId: m.profileId ? String(m.profileId).trim() : undefined,
+          role: m.role === "owner" || m.role === "member" ? m.role : undefined,
+        };
+        if (!member.profileId && member.walletAddress) {
+          const resolved = await resolveProfileName(member.walletAddress as string);
+          if (resolved) {
+            member.profileId = resolved.profileId;
+            if (resolved.displayName) member.displayName = resolved.displayName;
+          }
+        }
+        return member;
+      })
+    );
 
     if (parsed.profileId && members.length > 0 && !members[0].profileId) {
       members[0].profileId = parsed.profileId;
@@ -118,7 +132,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
     console.log("[groups.POST] STEP 8b complete");
 
-    console.log("[groups.POST] STEP 9 - return success response");
+    console.log("[groups.POST] STEP 9 - dispatch creation notifications");
+    notifyGroupMembers(groupId, null, {
+      type: NOTIFICATION_TYPES.GROUP_CREATED,
+      title: "Group Created",
+      message: `"${parsed.name}" was created.`,
+      groupId,
+      groupName: parsed.name,
+    }, payload).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "POST /api/groups", type: NOTIFICATION_TYPES.GROUP_CREATED, groupId });
+    }).catch(() => {});
+    console.log("[groups.POST] STEP 10 - return success response");
     return okResponse({ groupId }, 201);
   } catch (error) {
     console.log("[groups.POST] STEP FAILED");

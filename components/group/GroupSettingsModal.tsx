@@ -33,6 +33,7 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
   const [memberInput, setMemberInput] = useState("");
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [error, setError] = useState("");
   const [imageFile, setImageFile] = useState<Blob | null>(null);
   const walletReady = useWalletReady();
@@ -41,11 +42,31 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
     return new Map(balances.map((balance) => [balance.member, balance.net]));
   }, [balances]);
 
-  const addMember = () => {
+  const addMember = async () => {
     const trimmed = memberInput.trim();
-    if (!trimmed) return;
+    if (!trimmed || resolving) return;
     if (members.some((member) => member.displayName.toLowerCase() === trimmed.toLowerCase())) {
       setError("Member already exists.");
+      return;
+    }
+    if (validateEvmAddress(trimmed)) {
+      setResolving(true);
+      setError("");
+      try {
+        const res = await fetch(`/api/wallet/resolve?address=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (!data.found) {
+          setError("This wallet is not linked to any profile in the app.");
+          return;
+        }
+        const newMember = { ...createMember(data.displayName, trimmed), profileId: data.profileId };
+        setMembers([...members, newMember]);
+        setMemberInput("");
+      } catch {
+        setError("Failed to check wallet. Try again.");
+      } finally {
+        setResolving(false);
+      }
       return;
     }
     setMembers([...members, createMember(trimmed)]);
@@ -218,8 +239,8 @@ export default function GroupSettingsModal({ group, balances, onClose, onSaved }
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>Members</label>
               <div className="member-input-row" style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                <input className="input-field" value={memberInput} placeholder="Add member" onChange={(e) => setMemberInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addMember())} />
-                <button type="button" onClick={addMember} className="btn-secondary" style={{ whiteSpace: "nowrap" }}>+ Add</button>
+                <input className="input-field" value={memberInput} placeholder="Add member" disabled={resolving} onChange={(e) => setMemberInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addMember())} />
+                <button type="button" onClick={addMember} className="btn-secondary" style={{ whiteSpace: "nowrap" }} disabled={resolving}>{resolving ? "..." : "+ Add"}</button>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {members.map((member) => {

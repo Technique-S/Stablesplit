@@ -62,18 +62,19 @@ export async function PATCH(
 
     const updatedDescription = String(parsed.description ?? data.description ?? "");
     const updatedPaidBy = String(parsed.paidBy ?? data.paidBy ?? "Someone");
-    const groupSnap2 = await adminDb.collection("groups").doc(parsed.groupId).get();
-    const groupData2 = groupSnap2.data()!;
-    const groupName2 = String(groupData2.name ?? "");
+    const groupName2 = String(groupData.name ?? "");
     resolveProfileId(auth.walletAddress).then((editorProfileId) => {
-      notifyGroupMembers(parsed.groupId!, editorProfileId, {
+      console.log("[Notification] ENTER", { endpoint: "PATCH /api/expenses/[id]", type: NOTIFICATION_TYPES.EXPENSE_UPDATED, groupId: parsed.groupId, actorWallet: auth.walletAddress, editorProfileId });
+      return notifyGroupMembers(parsed.groupId!, editorProfileId, {
         type: NOTIFICATION_TYPES.EXPENSE_UPDATED,
         title: "Expense Updated",
         message: `${updatedPaidBy} updated "${updatedDescription}"`,
         groupId: parsed.groupId,
         groupName: groupName2,
         actorName: updatedPaidBy,
-      });
+      }, groupData);
+    }).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "PATCH /api/expenses/[id]", type: NOTIFICATION_TYPES.EXPENSE_UPDATED, groupId: parsed.groupId });
     }).catch(() => {});
 
     return okResponse({ success: true });
@@ -129,14 +130,17 @@ export async function DELETE(
     const deletedPaidBy = String(data.paidBy ?? "Someone");
     const groupNameDelete = String(groupData.name ?? "");
     resolveProfileId(auth.walletAddress).then((deleterProfileId) => {
-      notifyGroupMembers(groupId, deleterProfileId, {
+      console.log("[Notification] ENTER", { endpoint: "DELETE /api/expenses/[id]", type: NOTIFICATION_TYPES.EXPENSE_DELETED, groupId, actorWallet: auth.walletAddress, deleterProfileId });
+      return notifyGroupMembers(groupId, deleterProfileId, {
         type: NOTIFICATION_TYPES.EXPENSE_DELETED,
         title: "Expense Removed",
         message: `${deletedPaidBy} removed an expense`,
         groupId,
         groupName: groupNameDelete,
         actorName: deletedPaidBy,
-      });
+      }, groupData);
+    }).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "DELETE /api/expenses/[id]", type: NOTIFICATION_TYPES.EXPENSE_DELETED, groupId });
     }).catch(() => {});
 
     return okResponse({ success: true });

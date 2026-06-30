@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp, resolveProfileId } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileName } from "@/lib/server/firebase-admin";
 import { notifyGroupMembers, notifySpecificMembers } from "@/lib/server/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { joinGroupSchema } from "@/lib/domain/schemas";
@@ -46,6 +46,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let memberProfileId = parsed.profileId || undefined;
+    if (!memberProfileId && resolvedWallet) {
+      const resolved = await resolveProfileName(resolvedWallet);
+      if (resolved) {
+        memberProfileId = resolved.profileId;
+        if (resolved.displayName) resolvedDisplayName = resolved.displayName;
+      }
+    }
+
     const newMember: Record<string, unknown> = {
       id: `member-${crypto.randomUUID()}`,
       displayName: resolvedDisplayName,
@@ -53,7 +62,7 @@ export async function POST(request: NextRequest) {
       avatarColor: undefined,
       createdAt: Date.now(),
       joinedAt: Date.now(),
-      profileId: parsed.profileId || undefined,
+      profileId: memberProfileId,
     };
 
     const updatedMembers = [...existingMembers, newMember];
@@ -135,6 +144,8 @@ export async function POST(request: NextRequest) {
       .filter(Boolean) as string[];
     const newMemberProfileId = parsed.profileId || undefined;
 
+    console.log("[Notification] ENTER", { endpoint: "POST /api/groups/join", groupId, actorWallet: auth.walletAddress, existingProfileCount: existingProfileIds.length, newMemberProfileId });
+
     Promise.all([
       existingProfileIds.length > 0
         ? notifyGroupMembers(groupId, newMemberProfileId ?? null, {
@@ -144,7 +155,7 @@ export async function POST(request: NextRequest) {
             groupId,
             groupName,
             actorName: resolvedDisplayName,
-          })
+          }, group)
         : Promise.resolve(),
 
       newMemberProfileId
@@ -157,7 +168,9 @@ export async function POST(request: NextRequest) {
             actorName: resolvedDisplayName,
           })
         : Promise.resolve(),
-    ]).catch(() => {});
+    ]).then(() => {
+      console.log("[Notification] EXIT", { endpoint: "POST /api/groups/join", groupId });
+    }).catch(() => {});
 
     return okResponse({ groupId, groupName, alreadyMember: false });
   } catch (error) {
