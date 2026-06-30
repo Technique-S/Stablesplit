@@ -24,7 +24,7 @@ export default function BridgePage() {
   const [step, setStep] = useState<Step>("form");
   const [statusMessage, setStatusMessage] = useState("");
   const [estimatedReceive, setEstimatedReceive] = useState<string | null>(null);
-  const [gasFees, setGasFees] = useState<string[]>([]);
+  const [gasFees, setGasFees] = useState<{ label: string; value: string }[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
@@ -111,6 +111,10 @@ export default function BridgePage() {
       setEstimatedReceive(estimate.amount);
       const fee = Math.max(0, Number(amount) - Number(estimate.amount));
       estimatedFeeRef.current = String(fee * 1.1 || "0.5");
+      const feeLines: { label: string; value: string }[] = [];
+      if (fee > 0) {
+        feeLines.push({ label: "Relay Fee", value: `${fee.toFixed(6)} USDC` });
+      }
       const feeByToken = estimate.gasFees
         .filter((g) => g.fees && g.fees.fee != null)
         .reduce<Map<string, bigint>>((acc, g) => {
@@ -122,10 +126,10 @@ export default function BridgePage() {
           }
           return acc;
         }, new Map());
-      const feeLines = Array.from(feeByToken.entries()).map(([token, total]) => {
+      for (const [token, total] of feeByToken.entries()) {
         const decimals = token === "USDC" ? 6 : 18;
-        return `${Number(formatUnits(total, decimals)).toFixed(6)} ${token}`;
-      });
+        feeLines.push({ label: "Network Fee", value: `${Number(formatUnits(total, decimals)).toFixed(6)} ${token}` });
+      }
       setGasFees(feeLines);
       setStep("form");
     } catch (err) {
@@ -428,8 +432,8 @@ export default function BridgePage() {
               </div>
               {gasFees.map((line, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
-                  <span style={{ color: "var(--text-2)" }}>{i === 0 ? "Network Fee" : ""}</span>
-                  <span style={{ color: "var(--text-2)" }}>{line}</span>
+                  <span style={{ color: "var(--text-2)" }}>{line.label}</span>
+                  <span style={{ color: "var(--text-2)" }}>{line.value}</span>
                 </div>
               ))}
             </div>
