@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount, useSwitchChain } from "wagmi";
+import { formatUnits } from "viem";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BridgeChain, type BridgeResult, type EstimateResult } from "@circle-fin/app-kit";
-import { TESTNET_BRIDGE_CHAINS, createAdapter, estimateBridge, executeBridge, retryBridge } from "@/lib/web3/bridge-kit";
+import { TESTNET_BRIDGE_CHAINS, createAdapter, estimateBridge, executeBridge, retryBridge, fetchUsdcBalance, getBridgeChainConfig } from "@/lib/web3/bridge-kit";
 
 type Step = "form" | "quoting" | "confirm" | "bridging" | "done" | "error" | "retrying";
 
 export default function BridgePage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const searchParams = useSearchParams();
   const { switchChainAsync } = useSwitchChain();
 
@@ -23,30 +24,83 @@ export default function BridgePage() {
   const [step, setStep] = useState<Step>("form");
   const [statusMessage, setStatusMessage] = useState("");
   const [estimatedReceive, setEstimatedReceive] = useState<string | null>(null);
-  const [gasFees, setGasFees] = useState<string | null>(null);
+  const [gasFees, setGasFees] = useState<string[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [switchingChain, setSwitchingChain] = useState(false);
+  const fromChainConfig = getBridgeChainConfig(fromChain);
+  const onWrongChain = !switchingChain && chainId !== undefined && fromChainConfig !== undefined && chainId !== fromChainConfig.chainId;
+  const fromChainLabel = TESTNET_BRIDGE_CHAINS.find((c) => c.value === fromChain)?.label ?? fromChain;
+  const currentChainLabel = TESTNET_BRIDGE_CHAINS.find((c) => getBridgeChainConfig(c.value)?.chainId === chainId)?.label ?? (chainId ? `Chain #${chainId}` : "Unknown");
+
   const failedResultRef = useRef<BridgeResult | null>(null);
-  const lastAdapterRef = useRef<any>(null);
+  const adapterRef = useRef<any>(null);
 
   const availableChains = TESTNET_BRIDGE_CHAINS.filter(
     (c) => c.value !== fromChain
   );
 
   useEffect(() => {
+    adapterRef.current = null;
     setToChain(
       TESTNET_BRIDGE_CHAINS.find((c) => c.value !== fromChain)?.value ?? BridgeChain.Base_Sepolia
     );
     setEstimatedReceive(null);
-    setGasFees(null);
+    setGasFees([]);
     setQuoteError(null);
   }, [fromChain]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBalanceLoading(true);
+    setUsdcBalance(null);
+    if (!address) {
+      setBalanceLoading(false);
+      return;
+    }
+    fetchUsdcBalance(address as `0x${string}`, fromChain)
+      .then((balance) => {
+        if (!cancelled) {
+          setUsdcBalance(balance);
+          setBalanceLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsdcBalance(null);
+          setBalanceLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [address, fromChain]);
+
+  const getCachedAdapter = useCallback(async () => {
+    if (!adapterRef.current) {
+      adapterRef.current = await createAdapter();
+    }
+    return adapterRef.current;
+  }, []);
+
+  const switchToFromChain = useCallback(async () => {
+    if (!fromChainConfig) return;
+    setSwitchingChain(true);
+    try {
+      await switchChainAsync({ chainId: fromChainConfig.chainId });
+    } catch {
+      setStatusMessage(`Could not switch to ${fromChainLabel}. Try switching manually in your wallet.`);
+      setStep("error");
+    } finally {
+      setSwitchingChain(false);
+    }
+  }, [fromChainConfig, fromChainLabel, switchChainAsync]);
 
   const fetchQuote = useCallback(async () => {
     if (!amount || Number(amount) <= 0 || !address) return;
     setStep("quoting");
     setQuoteError(null);
     try {
-      const adapter = await createAdapter();
+      const adapter = await getCachedAdapter();
       const estimate = await estimateBridge({
         from: { adapter, chain: fromChain },
         to: { adapter, chain: toChain },
@@ -54,12 +108,22 @@ export default function BridgePage() {
         token: "USDC",
       });
       setEstimatedReceive(estimate.amount);
-      const totalGas = estimate.gasFees
-        .filter((g) => g.fees)
-        .reduce((sum, g) => sum + Number(g.fees!.fee || 0), 0)
-        .toFixed(6);
-      const gasToken = estimate.gasFees.find((g) => g.fees)?.token || "";
-      setGasFees(`${totalGas} ${gasToken}`);
+      const feeByToken = estimate.gasFees
+        .filter((g) => g.fees && g.fees.fee != null)
+        .reduce<Map<string, bigint>>((acc, g) => {
+          try {
+            const feeBigInt = BigInt(g.fees!.fee);
+            acc.set(g.token, (acc.get(g.token) || BigInt(0)) + feeBigInt);
+          } catch {
+            /* skip invalid fee string */
+          }
+          return acc;
+        }, new Map());
+      const feeLines = Array.from(feeByToken.entries()).map(([token, total]) => {
+        const decimals = token === "USDC" ? 6 : 18;
+        return `${Number(formatUnits(total, decimals)).toFixed(6)} ${token}`;
+      });
+      setGasFees(feeLines);
       setStep("form");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to get quote";
@@ -79,8 +143,19 @@ export default function BridgePage() {
     setStep("bridging");
     setStatusMessage("Preparing bridge transaction...");
     try {
-      const adapter = await createAdapter();
+      const adapter = await getCachedAdapter();
       setStatusMessage("Waiting for wallet confirmation...");
+      const toChainConfig = getBridgeChainConfig(toChain);
+      if (toChainConfig && chainId !== toChainConfig.chainId) {
+        try {
+          await switchChainAsync({ chainId: toChainConfig.chainId });
+          if (fromChainConfig && toChainConfig.chainId !== fromChainConfig.chainId) {
+            await switchChainAsync({ chainId: fromChainConfig.chainId });
+          }
+        } catch {
+          /* proceed — SDK will try to switch internally */
+        }
+      }
       const result = await executeBridge({
         from: { adapter, chain: fromChain },
         to: { adapter, chain: toChain },
@@ -92,21 +167,26 @@ export default function BridgePage() {
         setStatusMessage(`Bridge complete! Transferred ${result.amount} USDC.`);
       } else {
         const burnStep = result.steps?.find((s) => s.name === "burn" && s.state === "success");
-        const failedStep = result.steps?.find((s) => s.name === "fetchAttestation" && s.state === "error");
+        const errorSteps = result.steps?.filter((s) => s.state === "error") || [];
         if (burnStep) {
-          const errorDetail = failedStep?.errorMessage ? ` (${failedStep.errorMessage})` : "";
           const explorerLink = burnStep.explorerUrl ? `\nView burn tx: ${burnStep.explorerUrl}` : "";
           failedResultRef.current = result;
-          lastAdapterRef.current = adapter;
-          setStatusMessage(`Burn completed on-chain${explorerLink}. Attestation fetch failed${errorDetail}. Your funds are bridged — you can retry to complete the mint.`);
+          const failureDetail = errorSteps.length > 0
+            ? "\n" + errorSteps.map((s) => `- ${s.name}: ${s.errorMessage || s.state}`).join("\n")
+            : "";
+          setStatusMessage(
+            `Burn completed on-chain${explorerLink}.${failureDetail}\n\nYour funds are bridged — you can retry to complete the mint.`
+          );
         } else {
-          setStatusMessage(`Bridge failed: ${result.state}`);
+          const failureDetail = errorSteps.length > 0
+            ? "\n" + errorSteps.map((s) => `- ${s.name}: ${s.errorMessage || s.state}`).join("\n")
+            : "";
+          setStatusMessage(`Bridge failed (result: ${result.state}).${failureDetail}`);
         }
         setStep("error");
       }
     } catch (err) {
       failedResultRef.current = null;
-      lastAdapterRef.current = null;
       const message = err instanceof Error ? err.message : "Bridge failed or was rejected.";
       setStep("error");
       setStatusMessage(message);
@@ -115,8 +195,7 @@ export default function BridgePage() {
 
   const handleRetry = async () => {
     const result = failedResultRef.current;
-    const adapter = lastAdapterRef.current;
-    if (!result || !adapter) {
+    if (!result) {
       setStatusMessage("No failed bridge to retry. Start a new bridge.");
       setStep("error");
       return;
@@ -124,15 +203,29 @@ export default function BridgePage() {
     setStep("retrying");
     setStatusMessage("Retrying bridge from last step...");
     try {
+      const adapter = await getCachedAdapter();
+      const toChainConfig = getBridgeChainConfig(toChain);
+      if (toChainConfig && chainId !== toChainConfig.chainId) {
+        try {
+          await switchChainAsync({ chainId: toChainConfig.chainId });
+          if (fromChainConfig && toChainConfig.chainId !== fromChainConfig.chainId) {
+            await switchChainAsync({ chainId: fromChainConfig.chainId });
+          }
+        } catch {
+          /* proceed — SDK will try to switch internally */
+        }
+      }
       const retryResult = await retryBridge(result, { from: adapter, to: adapter });
       if (retryResult.state === "success") {
         failedResultRef.current = null;
-        lastAdapterRef.current = null;
         setStep("done");
         setStatusMessage(`Bridge complete! Transferred ${retryResult.amount} USDC.`);
       } else {
-        const failedStep = retryResult.steps?.find((s) => s.state === "error");
-        setStatusMessage(`Retry failed: ${failedStep?.errorMessage || retryResult.state}`);
+        const errorSteps = retryResult.steps?.filter((s) => s.state === "error") || [];
+        const failureDetail = errorSteps.length > 0
+          ? "\n" + errorSteps.map((s) => `- ${s.name}: ${s.errorMessage || s.state}`).join("\n")
+          : "";
+        setStatusMessage(`Retry failed (${retryResult.state}).${failureDetail}`);
         setStep("error");
       }
     } catch (err) {
@@ -145,7 +238,7 @@ export default function BridgePage() {
   const resetForm = () => {
     setAmount("");
     setEstimatedReceive(null);
-    setGasFees(null);
+    setGasFees([]);
     setQuoteError(null);
     setStatusMessage("");
     setStep("form");
@@ -269,13 +362,32 @@ export default function BridgePage() {
             </div>
           </div>
 
+          {onWrongChain && (
+            <div style={{ padding: "0.75rem 1rem", background: "var(--yellow-light, #fef9c3)", borderRadius: 8, marginBottom: "1rem", fontSize: "0.8125rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+                <span>
+                  Wallet is on <strong>{currentChainLabel}</strong>. Switch to <strong>{fromChainLabel}</strong> to bridge.
+                </span>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={switchToFromChain}
+                  disabled={switchingChain}
+                  style={{ fontSize: "0.8125rem", padding: "0.375rem 0.75rem", whiteSpace: "nowrap" }}
+                >
+                  {switchingChain ? "Switching..." : `Switch to ${fromChainLabel}`}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div>
             <label style={labelStyle}>Amount (USDC)</label>
             <div style={{ position: "relative" }}>
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="0.000001"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
@@ -286,7 +398,26 @@ export default function BridgePage() {
                 USDC
               </span>
             </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-0.5rem", marginBottom: "1rem", minHeight: "1.25rem" }}>
+              {balanceLoading && (
+                <span style={{ fontSize: "0.75rem", color: "var(--text-2)" }}>Checking balance...</span>
+              )}
+              {!balanceLoading && usdcBalance !== null && (
+                <span style={{ fontSize: "0.75rem", color: "var(--text-2)" }}>
+                  Balance: <strong>{Number(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</strong> USDC
+                </span>
+              )}
+              {!balanceLoading && usdcBalance === null && (
+                <span style={{ fontSize: "0.75rem", color: "var(--text-2)" }}>Balance: N/A</span>
+              )}
+            </div>
           </div>
+
+          {usdcBalance !== null && amount && Number(amount) > Number(usdcBalance) && (
+            <div style={{ padding: "0.5rem 0.75rem", background: "var(--red-light, #fef2f2)", borderRadius: 8, marginBottom: "1rem", fontSize: "0.8125rem", color: "var(--red, #dc2626)" }}>
+              Insufficient USDC balance. Available: {Number(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDC
+            </div>
+          )}
 
           {step === "retrying" && (
             <div style={{ padding: "1rem", background: "var(--blue-light)", borderRadius: 8, marginBottom: "1rem", fontSize: "0.875rem", fontWeight: 500 }}>
@@ -312,12 +443,12 @@ export default function BridgePage() {
                 <span style={{ color: "var(--text-2)" }}>Estimated Receive</span>
                 <span style={{ fontWeight: 600 }}>{Number(estimatedReceive).toFixed(6)} USDC</span>
               </div>
-              {gasFees && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
-                  <span style={{ color: "var(--text-2)" }}>Network Fee</span>
-                  <span style={{ color: "var(--text-2)" }}>{gasFees}</span>
+              {gasFees.map((line, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
+                  <span style={{ color: "var(--text-2)" }}>{i === 0 ? "Network Fee" : ""}</span>
+                  <span style={{ color: "var(--text-2)" }}>{line}</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -336,7 +467,7 @@ export default function BridgePage() {
                     Retry
                   </button>
                 )}
-                <button type="button" className="btn-secondary" onClick={() => { failedResultRef.current = null; lastAdapterRef.current = null; resetForm(); }} style={{ fontSize: "0.8125rem" }}>
+                <button type="button" className="btn-secondary" onClick={() => { failedResultRef.current = null; adapterRef.current = null; resetForm(); }} style={{ fontSize: "0.8125rem" }}>
                   Start Over
                 </button>
               </div>
@@ -348,18 +479,20 @@ export default function BridgePage() {
             className="btn-primary"
             onClick={handleBridge}
             disabled={
+              onWrongChain ||
               step === "bridging" ||
               step === "quoting" ||
               step === "retrying" ||
               !amount ||
               Number(amount) <= 0 ||
-              fromChain === toChain
+              fromChain === toChain ||
+              (usdcBalance !== null && Number(amount) > Number(usdcBalance))
             }
             style={{
               width: "100%",
               padding: "0.75rem",
               fontSize: "1rem",
-              opacity: step === "bridging" || step === "quoting" || step === "retrying" || !amount || Number(amount) <= 0 || fromChain === toChain ? 0.6 : 1,
+              opacity: onWrongChain || step === "bridging" || step === "quoting" || step === "retrying" || !amount || Number(amount) <= 0 || fromChain === toChain || (usdcBalance !== null && Number(amount) > Number(usdcBalance)) ? 0.6 : 1,
             }}
           >
             {step === "bridging" ? "Bridging..." : step === "quoting" ? "Getting Quote..." : step === "retrying" ? "Retrying..." : `Bridge ${amount || "0"} USDC`}

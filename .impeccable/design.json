@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-30T04:06:00.000Z",
+  "title": "Design System: StableSplit",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Confidence Blue",
+        "canonical": "oklch(0.50 0.20 265)",
+        "tonalRamp": ["oklch(0.15 0.05 265)", "oklch(0.25 0.10 265)", "oklch(0.35 0.15 265)", "oklch(0.45 0.18 265)", "oklch(0.55 0.20 265)", "oklch(0.65 0.15 265)", "oklch(0.80 0.08 265)", "oklch(0.93 0.03 265)"]
+      },
+      "secure-green": {
+        "role": "semantic",
+        "displayName": "Secure Green",
+        "canonical": "oklch(0.55 0.15 155)",
+        "tonalRamp": ["oklch(0.15 0.03 155)", "oklch(0.25 0.06 155)", "oklch(0.35 0.09 155)", "oklch(0.45 0.12 155)", "oklch(0.55 0.15 155)", "oklch(0.70 0.10 155)", "oklch(0.85 0.05 155)", "oklch(0.95 0.02 155)"]
+      },
+      "alert-red": {
+        "role": "semantic",
+        "displayName": "Alert Red",
+        "canonical": "oklch(0.50 0.20 25)",
+        "tonalRamp": ["oklch(0.15 0.05 25)", "oklch(0.25 0.10 25)", "oklch(0.35 0.15 25)", "oklch(0.45 0.18 25)", "oklch(0.55 0.20 25)", "oklch(0.65 0.15 25)", "oklch(0.80 0.08 25)", "oklch(0.93 0.03 25)"]
+      },
+      "caution-amber": {
+        "role": "semantic",
+        "displayName": "Caution Amber",
+        "canonical": "oklch(0.70 0.15 75)",
+        "tonalRamp": ["oklch(0.15 0.03 75)", "oklch(0.25 0.06 75)", "oklch(0.35 0.09 75)", "oklch(0.45 0.12 75)", "oklch(0.55 0.14 75)", "oklch(0.65 0.15 75)", "oklch(0.80 0.10 75)", "oklch(0.95 0.03 75)"]
+      },
+      "deep-ink": {
+        "role": "text",
+        "displayName": "Deep Ink",
+        "canonical": "oklch(0.15 0.02 260)",
+        "tonalRamp": ["oklch(0.05 0.01 260)", "oklch(0.10 0.02 260)", "oklch(0.15 0.02 260)", "oklch(0.25 0.03 260)", "oklch(0.35 0.03 260)", "oklch(0.50 0.02 260)", "oklch(0.70 0.01 260)", "oklch(0.90 0.005 260)"]
+      },
+      "cool-breeze": {
+        "role": "background",
+        "displayName": "Cool Breeze",
+        "canonical": "oklch(0.97 0.005 260)"
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page-level headings — Dashboard title, section openers." },
+      "headline": { "displayName": "Headline", "purpose": "Section headings — 'Your Groups', 'Recent Activity'." },
+      "title": { "displayName": "Title", "purpose": "Card titles, modal headers, group names." },
+      "body": { "displayName": "Body", "purpose": "Standard reading text across the app." },
+      "label": { "displayName": "Label", "purpose": "Buttons, form labels, table cells." },
+      "mono": { "displayName": "Mono", "purpose": "Monetary amounts, wallet addresses, settlement values." }
+    },
+    "shadows": [
+      { "name": "ambient-sm", "value": "0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)", "purpose": "Default card state — barely perceptible lift from page background." },
+      { "name": "ambient-elevated", "value": "0 8px 25px rgba(0,82,255,0.08), 0 2px 8px rgba(0,0,0,0.06)", "purpose": "Card hover — blue-tinted to signal actionability." },
+      { "name": "ambient-md", "value": "0 4px 16px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04)", "purpose": "Modal, dropdown, floating elements." },
+      { "name": "ambient-lg", "value": "0 12px 32px rgba(15,23,42,0.1), 0 4px 12px rgba(15,23,42,0.06)", "purpose": "Toast notifications, elevated modals." }
+    ],
+    "motion": [
+      { "name": "ease-spring", "value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "purpose": "Interactive transitions — hover, focus, card lift." },
+      { "name": "ease-smooth", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Entrance animations — fade-in, card entrance." },
+      { "name": "ease-out", "value": "cubic-bezier(0, 0, 0.2, 1)", "purpose": "Exit animations — toast slide-out." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Quick state transitions." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary call-to-action — use sparingly, one per view.",
+      "html": "<button class=\"ds-btn-primary\">Create Group</button>",
+      "css": ".ds-btn-primary { background: #0052FF; color: #fff; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 0.875rem; letter-spacing: -0.01em; padding: 10px 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; -webkit-tap-highlight-color: transparent; user-select: none; transition: box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); } .ds-btn-primary:hover { box-shadow: 0 4px 14px rgba(0,82,255,0.30); } .ds-btn-primary:active { transform: scale(0.97); transition-duration: 0.05s; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary action — alternatives to primary.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { background: #FFFFFF; color: #0F172A; border: 1.5px solid #E2E8F0; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 0.875rem; padding: 10px 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; -webkit-tap-highlight-color: transparent; user-select: none; transition: border-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); } .ds-btn-secondary:hover { border-color: #0052FF; color: #0052FF; } .ds-btn-secondary:active { transform: scale(0.97); transition-duration: 0.05s; } .ds-btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Tertiary toolbar action.",
+      "html": "<button class=\"ds-btn-ghost\">Edit</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: #64748B; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 0.875rem; padding: 10px 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; -webkit-tap-highlight-color: transparent; user-select: none; transition: background 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); } .ds-btn-ghost:hover { background: #F1F4F9; } .ds-btn-ghost:active { transform: scale(0.97); transition-duration: 0.05s; } .ds-btn-ghost:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive confirmation — delete, remove, leave.",
+      "html": "<button class=\"ds-btn-danger\">Delete Group</button>",
+      "css": ".ds-btn-danger { background: #DC2626; color: #fff; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 0.875rem; letter-spacing: -0.01em; padding: 10px 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; -webkit-tap-highlight-color: transparent; user-select: none; transition: filter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); } .ds-btn-danger:hover { filter: brightness(1.15); box-shadow: 0 4px 12px rgba(220,38,38,0.30); transform: translateY(-1px); } .ds-btn-danger:active { transform: scale(0.97); transition-duration: 0.05s; } .ds-btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Content container — flat at rest, lifts on hover.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-icon\"></div><div><h3 class=\"ds-card-title\">Trip to Paris</h3><p class=\"ds-card-desc\">5 members · Jun 2026</p></div></div>",
+      "css": ".ds-card { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04); padding: 24px; transition: box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s ease; display: flex; align-items: center; gap: 1rem; } .ds-card:hover { box-shadow: 0 8px 25px rgba(0,82,255,0.08), 0 2px 8px rgba(0,0,0,0.06); transform: translateY(-3px); border-color: #BFDBFE; } .ds-card:active { transform: translateY(0); transition-duration: 0.05s; } .ds-card-icon { width: 44px; height: 44px; border-radius: 12px; background: #EFF6FF; flex-shrink: 0; } .ds-card-title { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; color: #0F172A; margin: 0 0 4px 0; } .ds-card-desc { font-family: 'DM Sans', sans-serif; font-size: 0.8125rem; color: #64748B; margin: 0; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Text input with focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Group name\" />",
+      "css": ".ds-input { width: 100%; background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 8px; padding: 10px 14px; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; color: #0F172A; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; box-sizing: border-box; } .ds-input:focus { border-color: #0052FF; box-shadow: 0 0 0 3px rgba(0,82,255,0.12); } .ds-input::placeholder { color: #64748B; } .ds-input:user-invalid { border-color: #DC2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.15); }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Status indicator — currency, demo, category tags.",
+      "html": "<span class=\"ds-badge\">USD</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 4px 10px; border-radius: 999px; background: #EFF6FF; color: #0052FF; font-family: 'DM Sans', sans-serif; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.01em; }"
+    },
+    {
+      "name": "Navbar",
+      "kind": "nav",
+      "refersTo": "navbar",
+      "description": "Top navigation bar with transparent backdrop.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-brand\">StableSplit</span><div class=\"ds-nav-actions\"><button class=\"ds-nav-btn\">☀</button><span class=\"ds-badge\">0x1234...5678</span></div></nav>",
+      "css": ".ds-nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: rgba(255,255,255,0.30); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.06); } .ds-nav-brand { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 1rem; color: #0F172A; } .ds-nav-actions { display: flex; align-items: center; gap: 0.75rem; } .ds-nav-btn { background: transparent; border: none; cursor: pointer; font-size: 1.25rem; padding: 4px; border-radius: 8px; transition: background 0.2s; } .ds-nav-btn:hover { background: #F1F4F9; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Friendly Vault",
+    "overview": "StableSplit treats money like a trusted companion — warm, clear, and never intimidating. Every surface is organized but not sterile, precise but not cold. The interface breathes with purpose: enough personality to feel human, enough restraint to inspire confidence where it matters most — on the numbers.\n\nDensity is moderate but airy. Cards have gentle rounded corners (14px) and lift on interaction with a spring-backed hover. The blue primary is confident without being aggressive — it leads the eye to actions without shouting. The palette stays tightly focused: one primary blue, three semantic colors, and a neutral family that leans slightly cool in light mode and decisively dark in dark mode.",
+    "keyCharacteristics": [
+      "Warm approachability through typography (DM Sans) and spring easings, not through warm-tinted backgrounds",
+      "Confidence through the blue primary — used sparingly, mostly on interactive elements",
+      "Structural elevation — flat by default, shadows appear on interaction",
+      "Tactile feedback — press scale, hover lift, spring easing on every interactive element",
+      "Dark mode with its own distinct character (cool deep grays, not inverted light mode)"
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Confidence Blue is the only accent. It appears on primary CTAs, links, and focus indicators — never as decorative fill or background gradient. Its presence means 'interact here.'", "section": "colors" },
+      { "name": "The Cold Canvas Rule", "body": "The page background in light mode (Cool Breeze, #F8F9FC) is not warm. Warmth is carried by the DM Sans typeface, the 14px corner radius, the spring easing, and the emoji category badges. Not by beige or cream.", "section": "colors" },
+      { "name": "The Numbers Rule", "body": "All currency amounts, balances, and token values use Space Mono. Numbers are the source of truth.", "section": "typography" },
+      { "name": "The Earned Shadow Rule", "body": "No shadows at rest. Cards, buttons, and surfaces are flat until the user interacts. Every shadow is a response, not decoration.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Confidence Blue (#0052FF) sparingly — on primary actions, links, and focus indicators only.",
+      "Do use Space Mono for all monetary amounts, wallet addresses, and numeric data.",
+      "Do keep the page background cool (Cool Breeze #F8F9FC in light, Midnight #0F0F0F in dark).",
+      "Do spring easing (var(--ease-spring)) on interactive transitions.",
+      "Do use scale(0.97) on active press with instant duration (0.05s).",
+      "Do test body text contrast at ≥4.5:1.",
+      "Do respect reduced motion — all animations collapse to instant via prefers-reduced-motion."
+    ],
+    "donts": [
+      "Don't use gradient text (background-clip: text with gradient).",
+      "Don't use side-stripe borders (border-left > 1px colored) on cards, list items, or callouts.",
+      "Don't add ambient shadows at rest. Every shadow is earned by interaction.",
+      "Don't pair two geometric sans-serifs or two humanist sans-serifs.",
+      "Don't use glassmorphism as default styling.",
+      "Don't use tiny uppercase tracked eyebrows above sections.",
+      "Don't hard-code colors that exist as design tokens.",
+      "Don't animate layout properties — stick to transform and opacity."
+    ]
+  }
+}

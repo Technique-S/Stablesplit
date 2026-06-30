@@ -5,6 +5,7 @@ import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { createStorage, http, noopStorage } from "wagmi";
 import { defineChain } from "viem";
 import { shortenAddress as _shortenAddress, validateEvmAddress } from "../domain/members";
+import { bridgeChains } from "./bridge-chains";
 
 export const ARC_TESTNET_ID = 5042002;
 export const ARC_TESTNET_RPC_URL = "https://rpc.testnet.arc.network";
@@ -44,16 +45,19 @@ const metadata = {
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 };
 
+const allNetworks = [arcTestnet, ...bridgeChains];
+const allTransports = Object.fromEntries(
+  allNetworks.map((c) => [c.id, http(c.rpcUrls.default.http[0])]),
+);
+
 export const wagmiAdapter = new WagmiAdapter({
-  networks: [arcTestnet],
+  networks: allNetworks,
   projectId: projectId || "missing-reown-project-id",
   ssr: true,
   storage: createStorage({
     storage: noopStorage,
   }),
-  transports: {
-    [arcTestnet.id]: http(ARC_TESTNET_RPC_URL),
-  },
+  transports: allTransports,
 });
 
 let appKitInitialized = false;
