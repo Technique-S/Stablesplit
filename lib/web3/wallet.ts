@@ -1,5 +1,6 @@
 "use client";
 
+import type { AppKitNetwork } from "@reown/appkit/networks";
 import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { createStorage, http, noopStorage } from "wagmi";
@@ -45,7 +46,7 @@ const metadata = {
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 };
 
-const allNetworks = [arcTestnet, ...bridgeChains];
+const allNetworks: [AppKitNetwork, ...AppKitNetwork[]] = [arcTestnet, ...bridgeChains];
 const allTransports = Object.fromEntries(
   allNetworks.map((c) => [c.id, http(c.rpcUrls.default.http[0])]),
 );
@@ -70,7 +71,7 @@ export function initAppKit() {
 
   createAppKit({
     adapters: [wagmiAdapter],
-    networks: [arcTestnet],
+    networks: allNetworks,
     projectId: projectId || "missing-reown-project-id",
     metadata: {
       ...metadata,
