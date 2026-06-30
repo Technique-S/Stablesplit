@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp, resolveProfileName } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileName, FieldValue } from "@/lib/server/firebase-admin";
 import { notifyGroupMembers } from "@/lib/server/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { groupBaseSchema } from "@/lib/domain/schemas";
@@ -132,7 +132,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
     console.log("[groups.POST] STEP 8b complete");
 
-    console.log("[groups.POST] STEP 9 - dispatch creation notifications");
+    console.log("[groups.POST] STEP 9 - update member profiles");
+    const memberPids = members
+      .map((m) => m.profileId as string | undefined)
+      .filter((pid): pid is string => !!pid);
+    if (memberPids.length > 0) {
+      const profileBatch = adminDb.batch();
+      for (const pid of memberPids) {
+        profileBatch.set(
+          adminDb.collection("users").doc(pid),
+          { joinedGroupIds: FieldValue.arrayUnion(groupId) },
+          { merge: true }
+        );
+      }
+      await profileBatch.commit();
+    }
+
+    console.log("[groups.POST] STEP 10 - dispatch creation notifications");
     notifyGroupMembers(groupId, null, {
       type: NOTIFICATION_TYPES.GROUP_CREATED,
       title: "Group Created",
@@ -142,7 +158,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }, payload).then(() => {
       console.log("[Notification] EXIT", { endpoint: "POST /api/groups", type: NOTIFICATION_TYPES.GROUP_CREATED, groupId });
     }).catch(() => {});
-    console.log("[groups.POST] STEP 10 - return success response");
+    console.log("[groups.POST] STEP 11 - return success response");
     return okResponse({ groupId }, 201);
   } catch (error) {
     console.log("[groups.POST] STEP FAILED");

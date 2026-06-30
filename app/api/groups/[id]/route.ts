@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifyAuth, okResponse, errorResponse, handleError, handleZodError } from "@/lib/server/api-utils";
-import { adminDb, serverTimestamp, resolveProfileId, resolveProfileName } from "@/lib/server/firebase-admin";
+import { adminDb, serverTimestamp, resolveProfileId, resolveProfileName, FieldValue } from "@/lib/server/firebase-admin";
 import { notifyGroupMembers } from "@/lib/server/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/constants/notification-types";
 import { updateGroupBaseSchema } from "@/lib/domain/schemas";
@@ -125,6 +125,13 @@ export async function PATCH(
         memberName: last.displayName,
       });
 
+      if (memberProfileId) {
+        await adminDb.collection("users").doc(memberProfileId).set(
+          { joinedGroupIds: FieldValue.arrayUnion(id) },
+          { merge: true }
+        );
+      }
+
       return okResponse({ success: true });
     }
 
@@ -176,7 +183,15 @@ export async function PATCH(
     if (parsed.photoURL !== undefined) updatePayload.photoURL = parsed.photoURL;
     if (parsed.templateType !== undefined) updatePayload.templateType = parsed.templateType;
 
+    let newMemberProfileIds: string[] = [];
+
     if (parsed.members !== undefined) {
+      const prevProfileIds = new Set(
+        (Array.isArray(group.members) ? group.members : [])
+          .map((m: Record<string, unknown>) => m.profileId as string | undefined)
+          .filter(Boolean) as string[]
+      );
+
       const normalizedMembers = await Promise.all(
         parsed.members.map(async (m) => {
           const member: Record<string, unknown> = {
@@ -194,6 +209,9 @@ export async function PATCH(
               member.profileId = resolved.profileId;
               if (resolved.displayName) member.displayName = resolved.displayName;
             }
+          }
+          if (member.profileId && !prevProfileIds.has(member.profileId as string)) {
+            newMemberProfileIds.push(member.profileId as string);
           }
           return member;
         })
@@ -217,6 +235,18 @@ export async function PATCH(
 
     const previous = group;
     await adminDb.collection("groups").doc(id).update(updatePayload);
+
+    if (newMemberProfileIds.length > 0) {
+      const profileBatch = adminDb.batch();
+      for (const pid of newMemberProfileIds) {
+        profileBatch.set(
+          adminDb.collection("users").doc(pid),
+          { joinedGroupIds: FieldValue.arrayUnion(id) },
+          { merge: true }
+        );
+      }
+      await profileBatch.commit();
+    }
 
     const prevName = String(previous.name ?? "");
     const newName = parsed.name ?? prevName;
